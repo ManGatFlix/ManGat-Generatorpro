@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inkaflix Generator Pro</title>
+
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #000;
+    color: #fff;
+  }
+
+  header {
+    background: #0a0a0a;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #333;
+  }
+
+  header h1 {
+    margin: 0;
+    color: #00aaff;
+    font-size: 22px;
+  }
+
+  .store-btn {
+    background: #111;
+    border: 1px solid #444;
+    padding: 8px 16px;
+    border-radius: 10px;
+    color: #fff;
+    cursor: pointer;
+  }
+
+  .container {
+    padding: 25px;
+  }
+
+  .title {
+    font-size: 28px;
+    font-weight: bold;
+    color: #ff2626;
+    margin-bottom: 10px;
+  }
+
+  .subtitle {
+    color: #ff4444;
+    font-size: 18px;
+    margin-bottom: 25px;
+  }
+
+  .card {
+    background: #171717;
+    border: 1px solid #333;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: 0.2s;
+    cursor: pointer;
+  }
+
+  .card:hover {
+    background: #1f1f1f;
+    border-color: #555;
+  }
+
+  .card-title {
+    font-size: 22px;
+    font-weight: bold;
+    color: #fff;
+  }
+
+  .card-desc {
+    color: #bbb;
+    font-size: 14px;
+  }
+
+  .arrow {
+    font-size: 30px;
+    color: #ff2626;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>cjplantillas</h1>
+  <button class="store-btn">🏠 store</button>
+</header>
+
+<div class="container">
+  <div class="title">Inkaflix Generator Pro</div>
+  <div class="subtitle">Creacion De Mangas</div>
+
+  <!-- FILMES -->
+  <div class="card" onclick="go('https://mangat-generatorpro.netlify.app/entrada')">
+    <div>
+      <div class="card-title">🎬 Creacion de entrada</div>
+      <div class="card-desc">Entrada Principal</div>
+    </div>
+    <div class="arrow">›</div>
+  </div>
+
+  <!-- SERIES -->
+  <div class="card" onclick="go('https://generador-mangat.netlify.app/animes.html')">
+    <div>
+      <div class="card-title">⭐ Creacion de Mnagas</div>
+      <div class="card-desc">creacion de entrada de imagenes de mangas</div>
+    </div>
+    <div class="arrow">›</div>
+  </div>
+
+  <!-- EPISODES -->
+  <div class="card" onclick="go('https://generador-mangat.netlify.app/imagenesmanga')">
+    <div>
+      <div class="card-title"># Creacion de Imaganes</div>
+      <div class="card-desc">por si se te olvida ooner mad imagenes</div>
+    </div>
+    <div class="arrow">›</div>
+  </div>
+
+</div>
+
+<script>
+function go(url) {
+  window.location.href = url;
+}
+</script>
+
+</body>
+</html>
