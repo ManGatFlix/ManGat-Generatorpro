@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Generador Full - Fix</title>
+<style>
+  :root{
+    --bg:#0b0b0b; --card:#101010; --muted:#9b9b9b;
+    --accent:#ff6b6b; --white:#ffffff;
+  }
+  *{box-sizing:border-box}
+  body{ margin:0; font-family:Inter, system-ui, Arial; background:#0d0d0d; color:var(--white); padding:18px; }
+  .wrap{ max-width:1100px; margin:0 auto; display:grid; grid-template-columns:1fr 420px; gap:18px; }
+  header{ grid-column:1 / -1; display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px; }
+  h1{ font-size:18px; margin:0; }
+  .panel{ background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:16px; border-radius:10px; }
+  label{ display:block; font-size:13px; color:var(--muted); margin-top:8px; }
+  input[type="text"], textarea, select{ width:100%; padding:8px 10px; margin-top:6px; background:#111; border:1px solid rgba(255,255,255,0.03); border-radius:8px; color:var(--white); }
+  button{ padding:10px 12px; border-radius:8px; border:0; cursor:pointer; background:var(--accent); color:#fff; font-weight:700; }
+  .muted{ color:var(--muted); font-size:13px; }
+  .chapters-list{ display:flex; flex-direction:column; gap:12px; margin-top:12px; }
+  .chapter{ background:#0f0f0f; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.02); }
+  .chapter .row{ display:flex; gap:8px; }
+  .small{ width:110px; }
+  .actions{ display:flex; gap:8px; margin-top:10px; }
+  #previewFrame{ width:100%; height:640px; border-radius:8px; border:1px solid rgba(255,255,255,0.04); background:#000; }
+  pre{ white-space:pre-wrap; max-height:300px; overflow:auto; background:#070707; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); }
+  .tiny{ font-size:12px; color:var(--muted); }
+  @media(max-width:980px){
+    .wrap{ grid-template-columns:1fr; }
+    #previewFrame{ height:480px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Generador Full Page — Fix</h1>
+    <div class="muted">Añade capítulos, genera la página completa y descárgala</div>
+  </header>
+
+  <!-- LEFT: Form -->
+  <div class="panel" id="formPanel">
+    <h2 style="margin:0 0 8px 0">Datos principales</h2>
+    <label>Título principal</label>
+    <input id="title" type="text" placeholder="Ej: Akdangdeul-eui Huwonja-ga Doeeotda">
+
+    <label>Subtítulo / autores</label>
+    <input id="subtitle" type="text" placeholder="Ej: LICO, Autor...">
+
+    <label>Portada (URL)</label>
+    <input id="cover" type="text" placeholder="https://...">
+
+    <label>Tags (separados por coma)</label>
+    <input id="tags" type="text" placeholder="ACTION, FANTASY, ISEKAI">
+
+    <hr style="border:none;border-top:1px solid rgba(255,255,255,0.03); margin:12px 0">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0">Capítulos</h3>
+      <div class="tiny">Puedes agregar o eliminar capítulos</div>
+    </div>
+
+    <div class="chapters-list" id="chaptersList"></div>
+
+    <div class="actions">
+      <button id="addBtn">➕ Agregar capítulo</button>
+      <button id="generateBtn">🛠️ Generar & Previsualizar</button>
+      <button id="downloadHtmlBtn">⬇️ Descargar .html</button>
+      <button id="downloadTxtBtn">⬇️ Descargar .txt</button>
+    </div>
+
+    <div style="margin-top:10px" class="tiny">Tip: llena al menos un capítulo antes de generar.</div>
+  </div>
+
+  <!-- RIGHT: Preview + Código -->
+  <div>
+    <div class="panel" style="margin-bottom:12px">
+      <h3 style="margin:0 0 8px 0">Vista previa</h3>
+      <iframe id="previewFrame" sandbox="allow-same-origin"></iframe>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin:0 0 8px 0">Código generado (HTML completo)</h3>
+      <pre id="outputCode">(presiona "Generar & Previsualizar")</pre>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------------- helpers ---------------- */
+let counter = 0;
+function createEl(tag, props = {}, children = []) {
+  const e = document.createElement(tag);
+  Object.entries(props).forEach(([k,v]) => { if(k === 'class') e.className = v; else if(k in e) e[k] = v; else e.setAttribute(k,v); });
+  children.forEach(c => e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c));
+  return e;
+}
+function escapeHTML(s){ return String(s||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
+
+/* ------------- UI: add / remove chapter -------------- */
+const chaptersList = document.getElementById('chaptersList');
+document.getElementById('addBtn').addEventListener('click', ()=> addChapter());
+document.getElementById('generateBtn').addEventListener('click', ()=> generateFullPage());
+document.getElementById('downloadHtmlBtn').addEventListener('click', ()=> downloadFile('page.html'));
+document.getElementById('downloadTxtBtn').addEventListener('click', ()=> downloadFile('codigo.txt'));
+
+function addChapter(data = {}) {
+  counter++;
+  const id = counter;
+  const box = createEl('div',{class:'chapter', id:`chapter_${id}`});
+  const inner = document.createElement('div');
+
+  inner.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div style="flex:1">
+        <label class="tiny">Miniatura (URL)</label>
+        <input type="text" id="thumb_${id}" value="${escapeHTML(data.thumb||'')}" placeholder="https://...">
+      </div>
+      <div style="flex:2">
+        <label class="tiny">Nombre del capítulo</label>
+        <input type="text" id="name_${id}" value="${escapeHTML(data.name||'')}" placeholder="Ej: The Male Lead Is...">
+      </div>
+      <div style="width:140px">
+        <label class="tiny">Vol/Ch</label>
+        <input type="text" id="volch_${id}" value="${escapeHTML(data.vol_ch||'')}" placeholder="Vol.1 Ch.39">
+      </div>
+      <div style="width:120px">
+        <label class="tiny">Idioma</label>
+        <input type="text" id="lang_${id}" value="${escapeHTML(data.lang||'MX')}" placeholder="MX">
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <div style="flex:1">
+        <label class="tiny">Grupo / Fansub</label>
+        <input type="text" id="group_${id}" value="${escapeHTML(data.group||'')}" placeholder="Princess Alliance">
+      </div>
+      <div style="width:120px">
+        <label class="tiny">Tiempo (ej: 8m)</label>
+        <input type="text" id="time_${id}" value="${escapeHTML(data.timeAgo||'')}" placeholder="8m">
+      </div>
+      <div style="flex:1">
+        <label class="tiny">URL destino</label>
+        <input type="text" id="url_${id}" value="${escapeHTML(data.url||'')}" placeholder="https://...">
+      </div>
+      <div style="width:56px;display:flex;align-items:flex-end">
+        <button type="button" title="Eliminar capítulo" style="background:#e23d3d;padding:8px;border-radius:8px" onclick="removeChapter(${id})">✖</button>
+      </div>
+    </div>
+  `;
+
+  box.appendChild(inner);
+  chaptersList.appendChild(box);
+  // scroll to bottom
+  box.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function removeChapter(id){
+  const el = document.getElementById('chapter_'+id);
+  if(el) el.remove();
+}
+
+/* ---------- Generate full page HTML ---------- */
+function collectData(){
+  const title = document.getElementById('title').value.trim() || 'Título';
+  const subtitle = document.getElementById('subtitle').value.trim() || '';
+  const cover = document.getElementById('cover').value.trim() || 'https://via.placeholder.com/280x400?text=Cover';
+  const tagsRaw = document.getElementById('tags').value.trim();
+  const tags = tagsRaw ? tagsRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+
+  // gather chapters by iterating existing chapter nodes
+  const chapters = [];
+  for(let i=1;i<=counter;i++){
+    const node = document.getElementById('chapter_'+i);
+    if(!node) continue;
+    const name = document.getElementById(`name_${i}`).value.trim();
+    if(!name) continue; // skip empty
+    const thumb = document.getElementById(`thumb_${i}`).value.trim() || 'https://via.placeholder.com/120x160?text=Thumb';
+    const vol_ch = document.getElementById(`volch_${i}`).value.trim();
+    const group = document.getElementById(`group_${i}`).value.trim();
+    const lang = document.getElementById(`lang_${i}`).value.trim() || 'MX';
+    const timeAgo = document.getElementById(`time_${i}`).value.trim() || '';
+    const url = document.getElementById(`url_${i}`).value.trim() || '#';
+    chapters.push({name, vol_ch, group, thumb, lang, timeAgo, url});
+  }
+
+  return {title, subtitle, cover, tags, chapters};
+}
+
+function langToEmoji(code){
+  const map = {GB:"🇬🇧", PL:"🇵🇱", JP:"🇯🇵", KR:"🇰🇷", EN:"🇺🇸", MX:"🇲🇽", SPA:"🇪🇸"};
+  return map[code] || "🏳️";
+}
+
+function buildChapterHTML(ch){
+  // safe escape
+  const name = escapeHTML(ch.name);
+  const vol_ch = escapeHTML(ch.vol_ch);
+  const group = escapeHTML(ch.group);
+  const thumb = escapeHTML(ch.thumb);
+  const langEmoji = langToEmoji(ch.lang);
+  const timeAgo = escapeHTML(ch.timeAgo);
+  const url = escapeHTML(ch.url);
+
+  return `
+  <div class="item" onclick="location.href='${url}'" style="display:flex;gap:12px;padding:10px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);margin-bottom:8px;cursor:pointer;">
+    <div class="thumb" style="width:72px;height:96px;border-radius:6px;overflow:hidden;background:#1a1a1a;">
+      <img src="${thumb}" style="width:100%;height:100%;object-fit:cover;">
+    </div>
+    <div class="info" style="flex:1;display:flex;flex-direction:column;gap:6px;">
+      <div class="name" style="font-weight:700;font-size:14px;">${name}</div>
+      <div class="meta2" style="color:var(--muted);font-size:13px;">${langEmoji} • ${vol_ch || ''} ${vol_ch && group ? '·' : ''} ${group || ''}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+      <div class="time" style="color:var(--muted);font-size:13px;">${timeAgo}</div>
+      <div class="bubble" style="width:34px;height:34px;border-radius:6px;background:rgba(255,255,255,0.03);display:flex;align-items:center;justify-content:center;color:var(--muted);">💬</div>
+    </div>
+  </div>
+  `;
+}
+
+function generateFullPage(){
+  const d = collectData();
+  // build tags html
+  const tagsHtml = d.tags.map(t=>`<span class="tag">${escapeHTML(t)}</span>`).join('\n        ');
+
+  // build chapters html
+  const chaptersHtml = d.chapters.map(c=>buildChapterHTML(c)).join('\n    ');
+
+  // full page template
+  const page = `<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>${escapeHTML(d.title)} - Página</title>
+<style>
+:root{--bg:#0b0b0b;--card:#101010;--muted:#9b9b9b;--accent:#ff6b6b;--white:#ffffff}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter, system-ui, Arial;background:linear-gradient(180deg,#070707 0%, #0e0e0e 100%);color:var(--white);padding:18px}
+.app{max-width:900px;margin:0 auto}
+.section-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.section-title h2{margin:0;font-size:20px;font-weight:700}
+.popular{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:10px;padding:18px;margin-bottom:20px}
+.popular-inner{display:grid;grid-template-columns:140px 1fr;gap:18px}
+.cover{width:140px;height:200px;border-radius:6px;overflow:hidden;background:#222;box-shadow:0 6px 18px rgba(0,0,0,0.7)}
+.cover img{width:100%;height:100%;object-fit:cover}
+.meta{display:flex;flex-direction:column;gap:12px}
+.title{font-size:18px;font-weight:800}
+.orig{color:var(--muted);font-size:13px}
+.tags{display:flex;gap:8px;flex-wrap:wrap}
+.tag{background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:6px;color:var(--muted);font-size:12px}
+.latest .list{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.item{display:flex;gap:12px;align-items:center;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);padding:10px;border-radius:8px;transition:.15s;cursor:pointer}
+.thumb{width:72px;height:96px;border-radius:6px;overflow:hidden;background:#1a1a1a}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.info{flex:1;display:flex;flex-direction:column;gap:6px}
+.meta2{display:flex;gap:10px;font-size:13px;color:var(--muted)}
+.bubble{width:34px;height:34px;border-radius:6px;background:rgba(255,255,255,0.03);display:flex;align-items:center;justify-content:center;color:var(--muted)}
+@media(max-width:720px){.popular-inner{grid-template-columns:120px 1fr}.cover{width:120px;height:170px}.thumb{width:56px;height:76px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="section-title">
+    <h2>Popular</h2>
+    <div class="sub">Auto generado</div>
+  </div>
+
+  <div class="popular">
+    <div class="popular-inner">
+      <div class="cover"><img src="${escapeHTML(d.cover)}" alt="cover"></div>
+      <div class="meta">
+        <div>
+          <div class="title">${escapeHTML(d.title)}</div>
+          <div class="orig">${escapeHTML(d.subtitle)}</div>
+        </div>
+        <div class="tags">
+          ${tagsHtml}
+        </div>
+        <div class="carousel-controls" style="margin-top:auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="latest">
+    <div class="section-title"><h2>Capítulos Recientes</h2><div class="sub"></div></div>
+    <div class="list">
+      ${chaptersHtml}
+    </div>
+  </div>
+</div>
+</body>
+</html>`;
+
+  // show in preview iframe and in output textarea
+  const iframe = document.getElementById('previewFrame');
+  iframe.srcdoc = page;
+  document.getElementById('outputCode').textContent = page;
+
+  // store last generated page for downloads
+  window._lastGeneratedPage = page;
+}
+
+/* ------------ download helpers -------------- */
+function downloadFile(defaultName){
+  const content = window._lastGeneratedPage || document.getElementById('outputCode').textContent;
+
+  if(!content || content.trim().length === 0){
+    alert('Primero presiona "Generar & Previsualizar" para crear la página.');
+    return;
+  }
+
+  // Obtener título y asegurar nombre seguro
+  let title = document.getElementById('title').value.trim() || "pagina";
+  title = title.replace(/[\/\\?%*:|"<>]/g, ""); // limpia caracteres no permitidos
+
+  // Detectar extensión según defaultName
+  const ext = defaultName.endsWith('.html') ? '.html' : '.txt';
+
+  // Nombre final del archivo
+  const filename = `${title}${ext}`;
+
+  const blob = new Blob([content], {
+    type: ext === '.html' ? 'text/html' : 'text/plain'
+  });
+
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+/* ------------- initialize with 2 sample chapters -------------- */
+addChapter({thumb:'https://via.placeholder.com/120x160?text=1', name:'The Male Lead Is Obsessed With My H...', vol_ch:'Vol. 1 Ch. 39', group:'Princess Alliance', lang:'MX', timeAgo:'8m', url:'#'});
+addChapter({thumb:'https://via.placeholder.com/120x160?text=2', name:'Gangster Love Simulation', vol_ch:'Ch. 7', group:'Heavenly Demon Scans', lang:'PL', timeAgo:'15m', url:'#'});
+</script>
+
+</body>
+</html>
