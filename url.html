@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Extraer URLs de imágenes</title>
+
+<style>
+  body{background:#111;color:#fff;font-family:Arial;padding:20px;}
+  input,button{padding:10px;border-radius:6px;border:none;margin:8px 0;width:100%;}
+  button{background:#1e90ff;color:white;cursor:pointer;font-weight:bold;}
+  .item{border-bottom:1px solid #444;padding:10px 0;margin-bottom:10px;}
+  .item img{max-width:180px;border-radius:10px;background:#222;padding:5px;margin-top:10px;}
+</style>
+</head>
+<body>
+
+<h2>Extractor PRO de URLs de imágenes</h2>
+
+<input id="pageUrl" type="text" placeholder="Pega la URL de la página aquí">
+<button onclick="extraer()">Extraer URLs</button>
+
+<div id="resultado"></div>
+
+<script>
+async function extraer() {
+  const url = document.getElementById("pageUrl").value.trim();
+  const box = document.getElementById("resultado");
+  box.innerHTML = "Cargando...";
+
+  try {
+    const proxy = "https://api.allorigins.win/raw?url=";
+    const res = await fetch(proxy + encodeURIComponent(url));
+    const html = await res.text();
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    let urls = new Set();
+
+    // ------------ 1. IMÁGENES <img> ------------
+    doc.querySelectorAll("img").forEach(img => {
+      urls.add(abs(url, img.src));
+    });
+
+    // ------------ 2. CSS inline ------------
+    doc.querySelectorAll("*").forEach(el => {
+      const style = el.getAttribute("style");
+      if (style) {
+        extractUrls(style).forEach(u => urls.add(abs(url, u)));
+      }
+    });
+
+    // ------------ 3. Etiquetas <style> ------------
+    doc.querySelectorAll("style").forEach(styleTag => {
+      extractUrls(styleTag.textContent).forEach(u => urls.add(abs(url, u)));
+    });
+
+    // ------------ 4. Enlaces <link> (iconos, sprites, etc.) ------------
+    doc.querySelectorAll("link").forEach(link => {
+      if (link.href && isImage(link.href)) {
+        urls.add(abs(url, link.href));
+      }
+    });
+
+    // ------------ 5. Scripts (JSON, sprites, preload) ------------
+    doc.querySelectorAll("script").forEach(sc => {
+      extractUrls(sc.textContent).forEach(u => urls.add(abs(url, u)));
+    });
+
+    // ------------ 6. Meta OG, Twitter cards ------------
+    doc.querySelectorAll("meta").forEach(meta => {
+      if (meta.content && isImage(meta.content)) {
+        urls.add(abs(url, meta.content));
+      }
+    });
+
+    // Mostrar resultados
+    if (urls.size === 0) {
+      box.innerHTML = "No se encontraron imágenes.";
+      return;
+    }
+
+    box.innerHTML = "";
+    urls.forEach(src => {
+      box.innerHTML += `
+        <div class="item">
+          <p>${src}</p>
+          <img src="${src}" onerror="this.style.display='none'">
+        </div>
+      `;
+    });
+
+  } catch (error) {
+    box.innerHTML = "No se pudo cargar la página.";
+  }
+}
+
+// ----------- UTILIDADES --------------
+function extractUrls(text) {
+  const found = [];
+  const regex = /url\(['"]?(.*?)['"]?\)/g;
+  const regex2 = /(https?:\/\/[^\s"'()<>]+?\.(png|jpe?g|gif|webp|svg|avif))/gi;
+
+  let match;
+
+  // url(...)
+  while ((match = regex.exec(text)) !== null) {
+    found.push(match[1]);
+  }
+
+  // URLs crudas dentro de scripts
+  while ((match = regex2.exec(text)) !== null) {
+    found.push(match[1]);
+  }
+
+  return found;
+}
+
+// Comprobar si es imagen
+function isImage(url) {
+  return /\.(png|jpg|jpeg|gif|webp|svg|avif|bmp|ico)$/i.test(url);
+}
+
+// Convertir rutas relativas en absolutas
+function abs(base, relative) {
+  try {
+    return new URL(relative, base).href;
+  } catch {
+    return relative;
+  }
+}
+</script>
+
+</body>
+</html>
