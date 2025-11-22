@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reproductor Multi-Servidor Estabilizado</title> 
+    
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script> 
+    
+    <script src="https://www.gstatic.com/cv/js/sender/prod/cast_sender.js?loadCastFramework=1"></script>
+    
+    <style>
+        /* ------------------------------------------------------------------ */
+        /* ESTILOS CSS */
+        /* ------------------------------------------------------------------ */
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            color: #fff;
+        }
+
+        .video-player-container {
+            width: 100%;
+            max-width: 1200px;
+            aspect-ratio: 16 / 9;
+            background-color: #000;
+            position: relative;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .controls-hidden.playing {
+            cursor: none; 
+        }
+        
+        #actual-video {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            object-fit: contain;
+            z-index: 1; 
+        }
+
+        /* ---------------------- ESTILOS DEL OVERLAY DE CARGA ---------------------- */
+        #loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.6); 
+            z-index: 15; 
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease; 
+        }
+
+        #loading-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .loading-message {
+            padding: 10px 20px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #fff;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            transform: scale(0.9); 
+            opacity: 0; 
+            transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55), opacity 0.3s ease; 
+        }
+
+        #loading-overlay.visible .loading-message {
+            transform: scale(1); 
+            opacity: 1; 
+        }
+        
+        /* Controles y Título */
+        .top-controls, .center-controls, .bottom-controls {
+            position: absolute;
+            left: 0;
+            right: 0;
+            z-index: 10;
+            transition: opacity 0.3s ease;
+        }
+        
+        .controls-hidden .top-controls,
+        .controls-hidden .center-controls,
+        .controls-hidden .bottom-controls {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .top-controls {
+            top: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0) 100%);
+        }
+
+        .top-left-info {
+            display: flex;
+            align-items: center;
+        }
+
+        .video-title {
+            font-size: 1.2em;
+            line-height: 1.2;
+            margin-left: 0;
+        }
+
+        .video-title small {
+            font-size: 0.7em;
+            display: block;
+            opacity: 0.8;
+        }
+
+        .top-right-icons {
+            display: flex;
+            gap: 15px;
+        }
+
+        .icon {
+            font-size: 24px;
+            cursor: pointer;
+            color: #fff;
+        }
+        
+        /* ---------------------- ESTILOS DEL MENÚ FLOTANTE (SERVIDOR) ---------------------- */
+        .quality-menu {
+            position: absolute;
+            top: 55px; 
+            right: 20px;
+            background-color: rgba(0, 0, 0, 0.85);
+            border-radius: 8px;
+            padding: 10px;
+            width: 200px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            z-index: 20; 
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: opacity 0.2s, visibility 0.2s, transform 0.2s;
+        }
+
+        .quality-menu.visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .menu-header {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+        }
+
+        /* Estilos para los botones de servidor (NUEVOS) */
+        .server-btn {
+            display: block;
+            width: 100%;
+            padding: 8px 10px;
+            margin-bottom: 5px;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            text-align: left;
+            cursor: pointer;
+            transition: background-color 0.1s;
+        }
+        .server-btn:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        .server-btn.active {
+            background-color: #2196F3; /* Color de selección */
+            font-weight: bold;
+        }
+
+        /* ----------------------------------------------------------------------------------------- */
+        
+        /* Controles Centrales */
+        .center-controls {
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .center-controls .control-button {
+            width: 55px;
+            height: 55px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            transition: background-color 0.1s;
+        }
+        
+        .center-controls .control-button.play-pause-btn.is-paused {
+            width: 75px;
+            height: 75px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+        }
+
+        .center-controls .icon {
+            font-size: 32px;
+            color: #fff;
+        }
+        
+        .center-controls .control-button.seek-back .icon {
+            transform: scaleX(-1);
+        }
+
+        /* Controles Inferiores */
+        .bottom-controls {
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 15px 20px;
+            background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0) 100%);
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 5px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 2.5px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: #fff;
+            border-radius: 2.5px;
+            position: relative;
+            transition: width 0.1s linear;
+        }
+
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 12px;
+            height: 12px;
+            background-color: #fff;
+            border-radius: 50%;
+            display: block;
+        }
+
+        .time-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+        }
+
+        .bottom-right-icons {
+            align-self: flex-end;
+        }
+        
+        #cast-button {
+            cursor: pointer;
+            --container-height: 24px;
+            --icon-margin: 0;
+        }
+        #caption-btn {
+            display: none; 
+        }
+    </style>
+</head>
+<body>
+    <div class="video-player-container controls-hidden" id="player-container">
+        
+        <video id="actual-video" preload="auto" playsinline></video>
+        
+        <div id="loading-overlay">
+            <span class="loading-message">Cargando...</span>
+        </div>
+        
+        <div class="top-controls">
+            <div class="top-left-info" id="top-left-info-block"> 
+                <div class="video-title">
+                  Avatar                               <br>
+                    <small id="video-info">Cargando fuente...</small>
+                </div>
+            </div>
+            
+            <div class="top-right-icons">
+                <span class="material-icons icon" id="settings-btn">settings</span> 
+                
+                <google-cast-launcher id="cast-button"></google-cast-launcher>
+                <span class="material-icons icon" id="caption-btn">closed_caption</span>
+            </div>
+        </div>
+        
+        <div class="quality-menu" id="server-menu"> 
+            <div class="menu-header">Seleccionar Servidor</div>
+            <div id="server-options-container">
+                </div>
+        </div>
+
+        <div class="center-controls">
+            <div class="control-button seek-back" id="seek-back">
+                <span class="material-icons icon">replay_10</span> 
+            </div>
+            <div class="control-button play-pause-btn is-paused" id="play-pause-btn">
+                <span class="material-icons icon" id="play-pause-icon">play_arrow</span>
+            </div>
+            <div class="control-button seek-forward" id="seek-forward">
+                <span class="material-icons icon">replay_10</span> 
+            </div>
+        </div>
+
+        <div class="bottom-controls">
+            <div class="time-info">
+                <span id="current-time">00:00</span>
+                <span id="remaining-time">-00:00</span>
+            </div>
+            <div class="progress-bar-container" id="progress-bar-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <div class="bottom-right-icons">
+                <span class="material-icons icon" id="fullscreen-btn">fullscreen</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ------------------------------------------------------------------
+        // CONFIGURACIÓN: LISTA DE SERVIDORES
+        // ------------------------------------------------------------------
+        
+        const SERVERS = [
+            { 
+                id: 'server1', 
+                name: 'Stremanh', 
+                url: 'https://1a-1791.com/video/s8/2/U/9/d/R/U9dRu.aaa.mp4', 
+                type: 'mp4' 
+            },
+            { 
+                id: 'server2', 
+                name: 'Flyxplor', 
+                url: 'https://1a-1791.com/video/s8/2/6/O/X/Q/6OXQu.aaa.mp4', 
+                type: 'mp3' // si es m3u8 soloo cambia el type
+            },
+            { 
+                id: 'server3', 
+                name: 'multiplow', 
+                url: 'https://1a-1791.com/video/s8/2/6/O/X/Q/6OXQu.aaa.mp4', 
+                type: 'mp4' 
+            }
+        ];
+
+        let currentServerId = SERVERS[0].id; // Cargar el primer servidor por defecto
+        // ------------------------------------------------------------------
+        
+        const video = document.getElementById('actual-video');
+        const playerContainer = document.getElementById('player-container');
+        const playPauseBtn = document.getElementById('play-pause-btn');
+        const playPauseIcon = document.getElementById('play-pause-icon');
+        const seekBackBtn = document.getElementById('seek-back');
+        const seekForwardBtn = document.getElementById('seek-forward');
+        const progressBarContainer = document.getElementById('progress-bar-container');
+        const progressBar = document.getElementById('progress-bar');
+        const currentTimeDisplay = document.getElementById('current-time');
+        const remainingTimeDisplay = document.getElementById('remaining-time');
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        const castButton = document.getElementById('cast-button'); 
+        const loadingOverlay = document.getElementById('loading-overlay'); 
+        const videoInfoDisplay = document.getElementById('video-info');
+        
+        // ELEMENTOS DEL MENÚ DE SERVIDORES
+        const settingsBtn = document.getElementById('settings-btn'); 
+        const serverMenu = document.getElementById('server-menu');   
+        const serverOptionsContainer = document.getElementById('server-options-container'); // Nuevo contenedor de botones
+
+        const allControls = document.querySelectorAll('.top-controls, .center-controls, .bottom-controls');
+
+        let controlsTimeout; 
+        let isDragging = false; 
+        let wasPlayingBeforeDrag = false; 
+        let hlsInstance = null; // Para guardar la instancia de HLS.js
+
+        // ------------------------------------------------------------------
+        // FUNCIONES DE UTILIDAD
+        // ------------------------------------------------------------------
+
+        function formatTime(seconds) {
+            if (isNaN(seconds) || seconds < 0) return '00:00';
+            const absSeconds = Math.abs(seconds);
+            const h = Math.floor(absSeconds / 3600);
+            const m = Math.floor((absSeconds % 3600) / 60);
+            const s = Math.floor(absSeconds % 60);
+            
+            let timeString = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+            if (h > 0) {
+                timeString = (h < 10 ? '0' : '') + h + ':' + timeString;
+            }
+            return timeString;
+        }
+
+        function togglePlayPause() {
+            if (video.paused || video.ended) {
+                video.play();
+            } else {
+                video.pause();
+            }
+        }
+        
+        function scrub(e) {
+            if (!video.duration) return;
+
+            const clientX = e.touches ? e.changedTouches[0].pageX : e.clientX;
+
+            const rect = progressBarContainer.getBoundingClientRect();
+            const clickX = Math.max(0, Math.min(clientX - rect.left, rect.width));
+            const percent = clickX / rect.width;
+            
+            video.currentTime = video.duration * percent;
+            
+            progressBar.style.width = percent * 100 + '%';
+            currentTimeDisplay.textContent = formatTime(video.currentTime);
+            remainingTimeDisplay.textContent = '-' + formatTime(video.duration - video.currentTime);
+        }
+
+        /**
+         * Carga la fuente de video según el ID del servidor, manejando MP4 y M3U8 (HLS).
+         */
+        function loadServer(serverId) {
+            const server = SERVERS.find(s => s.id === serverId);
+            if (!server) {
+                console.error(`Servidor ID ${serverId} no encontrado.`);
+                return;
+            }
+
+            // 1. Marcar el botón activo
+            document.querySelectorAll('.server-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(`btn-${serverId}`).classList.add('active');
+
+
+            // 2. Destruir HLS si existe
+            if (hlsInstance) {
+                hlsInstance.destroy();
+                hlsInstance = null;
+            }
+            
+            const wasPlaying = !video.paused;
+            const currentTime = video.currentTime;
+            
+            // 3. Mostrar carga
+            loadingOverlay.classList.add('visible');
+            videoInfoDisplay.textContent = server.name;
+            currentServerId = server.id;
+
+            // 4. Limpiar source y re-adjuntar elementos (importante para HLS)
+            video.removeAttribute('src');
+            video.load();
+
+            if (server.type === 'm3u8' && Hls.isSupported()) {
+                // CARGA HLS (M3U8)
+                hlsInstance = new Hls();
+                hlsInstance.on(Hls.Events.MEDIA_ATTACHED, function () {
+                    hlsInstance.loadSource(server.url);
+                });
+
+                hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
+                    // Restablecer tiempo y reanudar
+                    video.currentTime = currentTime; 
+                    if (wasPlaying) video.play().catch(e => console.error("Error al reanudar:", e));
+                    loadingOverlay.classList.remove('visible');
+                    video.addEventListener('loadedmetadata', () => {
+                        remainingTimeDisplay.textContent = '-' + formatTime(video.duration);
+                    }, { once: true });
+                });
+                
+                hlsInstance.on(Hls.Events.ERROR, function (event, data) {
+                    console.error("HLS Error:", data.details);
+                    if (data.fatal) {
+                        videoInfoDisplay.textContent = `${server.name} (Error: Fallback MP4)`;
+                    }
+                });
+
+                hlsInstance.attachMedia(video);
+                
+            } else {
+                // CARGA MP4
+                video.src = server.url;
+                video.load();
+                
+                // Usamos un listener para saber cuándo cargar y reanudar
+                const handleLoadedData = () => {
+                    video.currentTime = currentTime; 
+                    if (wasPlaying) video.play().catch(e => console.error("Error al reanudar:", e));
+                    loadingOverlay.classList.remove('visible');
+                    remainingTimeDisplay.textContent = '-' + formatTime(video.duration);
+                    video.removeEventListener('loadeddata', handleLoadedData);
+                };
+                
+                video.addEventListener('loadeddata', handleLoadedData);
+            }
+            // 5. Cierra el menú después de iniciar la carga
+            serverMenu.classList.remove('visible'); 
+        }
+        
+        // ------------------------------------------------------------------
+        // INICIALIZACIÓN Y EVENTOS DEL SELECTOR
+        // ------------------------------------------------------------------
+
+        /**
+         * Crea los botones de servidor dinámicamente.
+         */
+        function initializeServerButtons() {
+            serverOptionsContainer.innerHTML = ''; // Limpiar contenedor
+
+            SERVERS.forEach(server => {
+                const button = document.createElement('button');
+                button.classList.add('server-btn');
+                button.setAttribute('id', `btn-${server.id}`);
+                button.textContent = server.name;
+                button.dataset.serverId = server.id;
+
+                button.addEventListener('click', () => {
+                    loadServer(server.id);
+                });
+                
+                serverOptionsContainer.appendChild(button);
+            });
+        }
+        
+        initializeServerButtons(); // Ejecutar inicialización de botones
+
+        // Evento de clic en la tuerquita: Abre/Cierra el menú
+        settingsBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); 
+            serverMenu.classList.toggle('visible');
+        });
+        
+        // CORRECCIÓN CLAVE: Evita que los clics DENTRO del menú de servidores cierren todo.
+        serverMenu.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+        serverMenu.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+        });
+
+
+        // Carga inicial (Llama a loadServer con el ID inicial)
+        loadServer(currentServerId);
+
+
+        // Eventos para el Overlay de Carga durante el cambio de tiempo 
+        video.addEventListener('seeking', () => {
+             if (!isDragging) {
+                 loadingOverlay.classList.add('visible');
+             }
+        });
+
+        video.addEventListener('seeked', () => {
+             loadingOverlay.classList.remove('visible');
+        });
+
+        // A. DETENER PROPAGACIÓN EN TODOS LOS CONTROLES 
+        allControls.forEach(control => {
+            control.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+            control.addEventListener('touchend', (e) => {
+                e.stopPropagation();
+            });
+        });
+
+        // B. GESTIÓN DEL CLICK (RATÓN) Y TOQUE (TÁCTIL) DE ALTERNANCIA 
+        
+        // 1. Alternancia al hacer clic (Ratón)
+        playerContainer.addEventListener('click', () => {
+            // Cierra el menú si está abierto
+            if (serverMenu.classList.contains('visible')) { 
+                serverMenu.classList.remove('visible');
+                return; 
+            }
+            
+            playerContainer.classList.toggle('controls-hidden');
+
+            const isHidden = playerContainer.classList.contains('controls-hidden');
+            
+            if (isHidden) {
+                if (!video.paused) { 
+                    playerContainer.style.cursor = 'none';
+                }
+            } else {
+                playerContainer.style.cursor = 'default';
+                clearTimeout(controlsTimeout);
+            }
+        });
+        
+        // 2. Alternancia al finalizar el toque (Táctil/Móvil)
+        playerContainer.addEventListener('touchend', (e) => {
+             if (isDragging) return; 
+
+             // Cierra el menú si está abierto
+             if (serverMenu.classList.contains('visible')) {
+                serverMenu.classList.remove('visible');
+                return;
+             }
+
+             e.preventDefault(); 
+             
+             playerContainer.classList.toggle('controls-hidden');
+
+             const isHidden = playerContainer.classList.contains('controls-hidden');
+            
+             if (!isHidden) {
+                 clearTimeout(controlsTimeout);
+             }
+        });
+
+        // 2. Click en el botón central de Play/Pause 
+        playPauseBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); 
+            togglePlayPause();
+        });
+
+
+        video.addEventListener('play', () => {
+            playPauseIcon.textContent = 'pause';
+            playPauseBtn.classList.remove('is-paused');
+            playerContainer.classList.add('playing');
+        });
+
+        video.addEventListener('pause', () => {
+            if (isDragging) return; 
+
+            playPauseIcon.textContent = 'play_arrow';
+            playPauseBtn.classList.add('is-paused');
+            playerContainer.classList.remove('playing');
+            
+            playerContainer.classList.remove('controls-hidden');
+            playerContainer.style.cursor = 'default';
+        });
+
+        // 3. Avance y Retroceso de 10 segundos 
+        seekBackBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); 
+            video.currentTime = Math.max(0, video.currentTime - 10);
+        });
+
+        seekForwardBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); 
+            video.currentTime = Math.min(video.duration, video.currentTime + 10);
+        });
+
+        // 4. Actualización de la Barra de Progreso y Tiempo (Normal) 
+        video.addEventListener('timeupdate', () => {
+            const duration = video.duration;
+            const currentTime = video.currentTime;
+
+            if (duration) {
+                const percent = (currentTime / duration) * 100;
+                if (!isDragging) { 
+                    progressBar.style.width = percent + '%';
+                }
+                currentTimeDisplay.textContent = formatTime(currentTime);
+                const remainingTime = duration - currentTime;
+                remainingTimeDisplay.textContent = '-' + formatTime(remainingTime);
+            }
+        });
+        
+        // ------------------------------------------------------------------
+        // LÓGICA DE ARRASTRE (SCRUBBING)
+        // ------------------------------------------------------------------
+
+        // Iniciar arrastre (Ratón)
+        progressBarContainer.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation(); 
+            isDragging = true;
+            wasPlayingBeforeDrag = !video.paused;
+            scrub(e); 
+            video.pause(); 
+            loadingOverlay.classList.add('visible'); 
+        });
+
+        // Mover el ratón (ACTUALIZACIÓN EN TIEMPO REAL)
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                e.preventDefault(); 
+                scrub(e); 
+            }
+        });
+
+        // Detener arrastre (Ratón)
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                loadingOverlay.classList.remove('visible'); 
+                
+                if (wasPlayingBeforeDrag) {
+                    video.play(); 
+                }
+            }
+        });
+        
+        // Iniciar arrastre (Táctil)
+        progressBarContainer.addEventListener('touchstart', (e) => {
+            e.preventDefault(); 
+            e.stopPropagation(); 
+            isDragging = true;
+            wasPlayingBeforeDrag = !video.paused;
+            scrub(e); 
+            video.pause(); 
+            loadingOverlay.classList.add('visible'); 
+        });
+
+        // Mover el dedo (Táctil - ACTUALIZACIÓN EN TIEMPO REAL)
+        document.addEventListener('touchmove', (e) => {
+            if (isDragging) {
+                e.preventDefault();
+                scrub(e); 
+            }
+        }, { passive: false });
+
+        // Detener arrastre (Táctil)
+        document.addEventListener('touchend', () => {
+            if (isDragging) {
+                isDragging = false;
+                loadingOverlay.classList.remove('visible'); 
+                
+                if (wasPlayingBeforeDrag) {
+                    video.play(); 
+                }
+            }
+        });
+        
+        // ------------------------------------------------------------------
+        // FIN LÓGICA DE ARRASTRE
+        // ------------------------------------------------------------------
+        
+
+        // 5. Fullscreen 
+        fullscreenBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); 
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                playerContainer.requestFullscreen();
+            }
+        });
+
+        // 6. Mostrar/Ocultar controles con movimiento del ratón 
+        playerContainer.addEventListener('mousemove', () => {
+            if (playerContainer.classList.contains('controls-hidden')) {
+                playerContainer.classList.remove('controls-hidden');
+                playerContainer.style.cursor = 'default';
+            }
+            
+            clearTimeout(controlsTimeout);
+            
+            controlsTimeout = setTimeout(() => {
+                if (!video.paused) {
+                    // Solo ocultamos si el menú de servidor NO está abierto
+                    if (!serverMenu.classList.contains('visible')) {
+                        playerContainer.classList.add('controls-hidden');
+                        playerContainer.style.cursor = 'none';
+                    }
+                }
+            }, 3000);
+        });
+        
+        // Ocultar el cursor al salir, si están ocultos los controles 
+        playerContainer.addEventListener('mouseleave', () => {
+            if (!video.paused && playerContainer.classList.contains('controls-hidden')) {
+                playerContainer.style.cursor = 'none';
+            }
+        });
+
+        // 7. Inicialización de GOOGLE CAST 
+        window['__onGCastApiAvailable'] = function(isAvailable) {
+            if (isAvailable) {
+                cast.framework.CastContext.getInstance().setOptions({
+                    receiverApplicationId: chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID, 
+                    autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+                });
+                castButton.style.display = 'block';
+            } else {
+                 castButton.style.display = 'none';
+                 document.getElementById('caption-btn').style.display = 'block';
+            }
+        };
+
+    </script>
+</body>
+</html>
