@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reproductor Multi-Servidor Estabilizado</title> 
+    <title>Reproductor Multi-Servidor Estabilizado con Contador de Anuncios</title> 
     
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script> 
+    
+    <script type="text/javascript" src="//imasdk.googleapis.com/js/sdkloader/ima3.js"></script>
     
     <script src="https://www.gstatic.com/cv/js/sender/prod/cast_sender.js?loadCastFramework=1"></script>
     
@@ -51,6 +53,53 @@
             object-fit: contain;
             z-index: 1; 
         }
+
+        /* ---------------------- ESTILO DEL AD CONTAINER (Donde se dibuja el anuncio y el botón Skip) ---------------------- */
+        #ad-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 5; 
+            pointer-events: none; 
+        }
+        
+        #ad-container.active {
+            pointer-events: auto; 
+        }
+        
+        /* Asegurarse de que el elemento del SDK dentro de ad-container ocupe todo el espacio */
+        #ad-container > div, 
+        #ad-container > div > div {
+             width: 100% !important;
+             height: 100% !important;
+        }
+
+        /* ⭐️ ESTILO DEL OVERLAY PARA EL CONTADOR (Parte Superior/Centro) ⭐️ */
+        #custom-ad-counter-overlay {
+            position: absolute;
+            top: 15px; /* Separación del borde superior */
+            left: 50%;
+            transform: translateX(-50%); /* Centrar horizontalmente */
+            z-index: 12; /* Encima del ad-container */
+            pointer-events: none; /* No debe interferir con clics del anuncio */
+            display: none; /* Oculto por defecto */
+        }
+
+        #custom-ad-counter-overlay #ad-title-info {
+            display: flex; 
+            align-items: center;
+            background-color: rgba(244, 67, 54, 0.85); /* Fondo rojo semi-transparente */
+            color: white;
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            white-space: nowrap; /* Evita que el texto se rompa */
+        }
+
 
         /* ---------------------- ESTILOS DEL OVERLAY DE CARGA ---------------------- */
         #loading-overlay {
@@ -178,7 +227,7 @@
             text-align: center;
         }
 
-        /* Estilos para los botones de servidor (NUEVOS) */
+        /* Estilos para los botones de servidor */
         .server-btn {
             display: block;
             width: 100%;
@@ -196,7 +245,7 @@
             background-color: rgba(255, 255, 255, 0.2);
         }
         .server-btn.active {
-            background-color: #2196F3; /* Color de selección */
+            background-color: #2196F3; 
             font-weight: bold;
         }
 
@@ -209,6 +258,10 @@
             display: flex;
             justify-content: center;
             gap: 20px;
+        }
+        /* Ocultar controles centrales durante el anuncio */
+        .ad-active .center-controls {
+            display: none;
         }
 
         .center-controls .control-button {
@@ -301,12 +354,32 @@
         #caption-btn {
             display: none; 
         }
+        
+        /* Contenedor para el control de volumen de anuncios (Requerido por IMA SDK) */
+        #ad-volume-control {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            z-index: 20; 
+            width: 50px; 
+            height: 50px;
+            opacity: 0; 
+            pointer-events: none;
+        }
+        
     </style>
 </head>
 <body>
     <div class="video-player-container controls-hidden" id="player-container">
         
+        <div id="ad-container"></div>
+        
         <video id="actual-video" preload="auto" playsinline></video>
+        
+        <div id="custom-ad-counter-overlay">
+            <span id="ad-title-info">Ads-Sin Anucmio Ser Vip esoere 1m30s</span>
+           
+        </div>
         
         <div id="loading-overlay">
             <span class="loading-message">Cargando...</span>
@@ -314,6 +387,7 @@
         
         <div class="top-controls">
             <div class="top-left-info" id="top-left-info-block"> 
+                
                 <div class="video-title">
                   Avatar                               <br>
                     <small id="video-info">Cargando fuente...</small>
@@ -358,6 +432,8 @@
                 <span class="material-icons icon" id="fullscreen-btn">fullscreen</span>
             </div>
         </div>
+        
+        <div id="ad-volume-control"></div>
     </div>
 
     <script>
@@ -369,14 +445,14 @@
             { 
                 id: 'server1', 
                 name: 'Stremanh', 
-                url: 'https://1a-1791.com/video/s8/2/U/9/d/R/U9dRu.aaa.mp4', 
-                type: 'mp4' 
+                url: 'https://rumble.com/hls-vod/6xyxzy/playlist.m3u8', 
+                type: 'm3u8' 
             },
             { 
                 id: 'server2', 
                 name: 'Flyxplor', 
                 url: 'https://1a-1791.com/video/s8/2/6/O/X/Q/6OXQu.aaa.mp4', 
-                type: 'mp3' // si es m3u8 soloo cambia el type
+                type: 'mp4' 
             },
             { 
                 id: 'server3', 
@@ -386,8 +462,21 @@
             }
         ];
 
-        let currentServerId = SERVERS[0].id; // Cargar el primer servidor por defecto
         // ------------------------------------------------------------------
+        // CONFIGURACIÓN: ANUNCIOS
+        // ------------------------------------------------------------------
+        
+        // ⭐️ Tu URL de anuncio original
+        const VAST_URL = 'https://impeccable-sense.com/dhmpF.z/dpGHNevXZGG/Un/EepmO9Bu/ZOUClukeP/TKYp3RM/D/k/wUNyz/YRtLNKjKc_wkOmTQAL3-NhycZrsoabW/1Opvd/DK0lxC';
+        // url original https://impeccable-sense.com/dhmpF.z/dpGHNevXZGG/Un/EepmO9Bu/ZOUClukeP/TKYp3RM/D/k/wUNyz/YRtLNKjKc_wkOmTQAL3-NhycZrsoabW/1Opvd/DK0lxC
+        // URL VAST de Google para PRUEBAS:
+        // const VAST_URL = 'https://pubads.g.doubleclick.net/gampad/ads?iu=/21775744923/external/vmap_ad_samples&sz=640x480&cust_params=sample_ar%3Dpreonly&ciu_szs=300x250&gdfp_req=1&ad_rule=1&output=xml_vmap1&unviewed_position_start=1&env=vp&impl=s&correlator=';
+        
+        // Cue points: '0' para Pre-roll, '15' para Mid-roll.
+        const CUE_POINTS = '0,15'; 
+        // ------------------------------------------------------------------
+        
+        let currentServerId = SERVERS[0].id; // Cargar el primer servidor por defecto
         
         const video = document.getElementById('actual-video');
         const playerContainer = document.getElementById('player-container');
@@ -404,22 +493,206 @@
         const loadingOverlay = document.getElementById('loading-overlay'); 
         const videoInfoDisplay = document.getElementById('video-info');
         
+        // ELEMENTOS DE ANUNCIOS
+        const adContainer = document.getElementById('ad-container');
+        const customAdCounterOverlay = document.getElementById('custom-ad-counter-overlay');
+        const adTitleInfo = document.getElementById('ad-title-info');
+
         // ELEMENTOS DEL MENÚ DE SERVIDORES
         const settingsBtn = document.getElementById('settings-btn'); 
         const serverMenu = document.getElementById('server-menu');   
-        const serverOptionsContainer = document.getElementById('server-options-container'); // Nuevo contenedor de botones
+        const serverOptionsContainer = document.getElementById('server-options-container'); 
 
         const allControls = document.querySelectorAll('.top-controls, .center-controls, .bottom-controls');
 
         let controlsTimeout; 
         let isDragging = false; 
         let wasPlayingBeforeDrag = false; 
-        let hlsInstance = null; // Para guardar la instancia de HLS.js
+        let hlsInstance = null; 
+        
+        // Variables de Ads
+        let adsManager = null;
+        let adsLoader = null;
+        let adDisplayContainer = null;
+        let adsInitialized = false; 
+        let isAdPlaying = false;
+        let userInteractionInitiated = false; 
 
         // ------------------------------------------------------------------
-        // FUNCIONES DE UTILIDAD
+        // GESTOR DE ANUNCIOS (ADS MANAGER)
         // ------------------------------------------------------------------
+        
+        function initAdsManager() {
+            if (typeof google === 'undefined' || typeof google.ima === 'undefined') {
+                console.error("IMA SDK no cargado.");
+                return;
+            }
+            
+            if (!adsInitialized) {
+                adsInitialized = true;
+                
+                console.log("Inicializando Ad Manager.");
 
+                // El elemento de volumen es esencial para la compatibilidad del SDK
+                adDisplayContainer = new google.ima.AdDisplayContainer(adContainer, video, document.getElementById('ad-volume-control'));
+                adsLoader = new google.ima.AdsLoader(adDisplayContainer);
+                
+                adsLoader.addEventListener(
+                    google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,
+                    onAdsManagerLoaded,
+                    false
+                );
+                adsLoader.addEventListener(
+                    google.ima.AdErrorEvent.Type.AD_ERROR,
+                    onAdError,
+                    false
+                );
+
+                adDisplayContainer.initialize();
+            }
+            
+            requestAds(VAST_URL, CUE_POINTS);
+        }
+        
+        function requestAds(adTagUrl, cuePoints) {
+            console.log("Solicitando anuncios con cue points:", cuePoints);
+            const adsRequest = new google.ima.AdsRequest();
+            adsRequest.adTagUrl = adTagUrl;
+            
+            adsRequest.nonLinearAdSlotWidth = 0;
+            adsRequest.nonLinearAdSlotHeight = 0;
+            adsRequest.setAdWillAutoPlay(true);
+            adsRequest.setAdWillPlayMuted(false); 
+            adsRequest.linearAdSlotWidth = playerContainer.offsetWidth;
+            adsRequest.linearAdSlotHeight = playerContainer.offsetHeight;
+            adsRequest.vastLoadTimeout = 8000;
+            
+            adsLoader.requestAds(adsRequest);
+        }
+
+        function onAdsManagerLoaded(adsManagerLoadedEvent) {
+            console.log("Ads Manager Loaded. Listo para iniciar en el primer clic.");
+            
+            const adsRenderingSettings = new google.ima.AdsRenderingSettings();
+            adsRenderingSettings.restoreCustomPlaybackStateOnAdBreakComplete = true; 
+            
+            // ⭐️ CONFIGURACIÓN CLAVE: El botón Skip aparece a los 15 segundos (coincide con tu XML)
+            adsRenderingSettings.skipButtonDisplayTime = 15000; 
+
+            adsManager = adsManagerLoadedEvent.getAdsManager(video, adsRenderingSettings);
+
+            adsManager.addEventListener(google.ima.AdErrorEvent.Type.AD_ERROR, onAdError);
+            adsManager.addEventListener(google.ima.AdEvent.Type.CONTENT_PAUSE_REQUESTED, onContentPauseRequested);
+            adsManager.addEventListener(google.ima.AdEvent.Type.CONTENT_RESUME_REQUESTED, onContentResumeRequested);
+            adsManager.addEventListener(google.ima.AdEvent.Type.ALL_ADS_COMPLETED, onAllAdsCompleted);
+            
+            adsManager.addEventListener(google.ima.AdEvent.Type.AD_PROGRESS, onAdProgress);
+            adsManager.addEventListener(google.ima.AdEvent.Type.SKIPPABLE_STATE_CHANGED, onSkippableStateChanged);
+            adsManager.addEventListener(google.ima.AdEvent.Type.STARTED, onAdStarted);
+            adsManager.addEventListener(google.ima.AdEvent.Type.COMPLETE, onAdCompleted);
+
+            try {
+                const viewMode = document.fullscreenElement ? google.ima.ViewMode.FULLSCREEN : google.ima.ViewMode.NORMAL;
+                adsManager.init(playerContainer.offsetWidth, playerContainer.offsetHeight, viewMode);
+            } catch (adError) {
+                console.error("Ad Manager Init Error:", adError);
+                if (video.paused) video.play(); 
+            }
+        }
+        
+        function onAdError(adErrorEvent) {
+            console.error('Ad Error:', adErrorEvent.getError().toString());
+            if (video.paused) {
+                 video.play();
+            }
+            isAdPlaying = false;
+            playerContainer.classList.remove('ad-active');
+            customAdCounterOverlay.style.display = 'none'; // Ocultar el nuevo contador
+            document.querySelector('.video-title').style.display = 'block';
+        }
+        
+        function onContentPauseRequested() {
+            console.log("Content Pause Requested.");
+            video.pause();
+            isAdPlaying = true;
+            playerContainer.classList.add('ad-active'); 
+            adContainer.classList.add('active');
+        }
+
+        function onContentResumeRequested() {
+            console.log("Content Resume Requested.");
+            isAdPlaying = false;
+            playerContainer.classList.remove('ad-active');
+            customAdCounterOverlay.style.display = 'none'; // Ocultar el nuevo contador
+            adContainer.classList.remove('active');
+            document.querySelector('.video-title').style.display = 'block';
+            
+            video.play();
+        }
+        
+        function onAllAdsCompleted() {
+             console.log("All Ads Completed.");
+        }
+        
+        function onAdStarted(adEvent) {
+            console.log("Ad Started.");
+            if (adEvent.getAd().isLinear()) {
+                customAdCounterOverlay.style.display = 'block'; // Mostrar el contador personalizado
+                document.querySelector('.video-title').style.display = 'none';
+            }
+        }
+        
+        function onAdCompleted(adEvent) {
+            console.log("Ad Completed.");
+            customAdCounterOverlay.style.display = 'none';
+            document.querySelector('.video-title').style.display = 'block';
+        }
+
+        // ⭐️ FUNCIÓN CLAVE: Lógica del contador de tiempo real del anuncio (M:SS) ⭐️
+        function onAdProgress(adEvent) {
+            const ad = adEvent.getAd();
+            const currentTime = adEvent.getAdData().currentTime;
+            const duration = ad.getDuration(); 
+            
+            // Tiempo límite de skip (configurado en 15 segundos)
+            const skipThreshold = 15; 
+            
+            if (duration <= 0 || duration === Infinity) {
+                // Si la duración no se reporta correctamente, mostramos un mensaje genérico.
+                adTitleInfo.innerHTML = `Ads - Anuncio`;
+                return;
+            }
+            
+            const totalRemaining = Math.ceil(duration - currentTime);
+            const formattedRemaining = formatTime(totalRemaining);
+            
+            if (ad.isSkippable() && currentTime < skipThreshold) {
+                // Caso 1: Anuncio saltable, mostrando cuenta regresiva para el botón Skip
+                const remainingToSkip = Math.ceil(skipThreshold - currentTime);
+                const timeToSkip = remainingToSkip > 0 ? remainingToSkip : 0;
+                
+                adTitleInfo.innerHTML = `Ads - Saltable en (${timeToSkip}) (Restante: ${formattedRemaining})`;
+
+            } else if (ad.isSkippable() && currentTime >= skipThreshold) {
+                // Caso 2: Anuncio saltable, ya se puede hacer skip (el SDK dibuja el botón)
+                
+                adTitleInfo.innerHTML = `Ads - Saltar ya (Restante: ${formattedRemaining})`;
+
+            } else {
+                // Caso 3: Anuncio NO saltable 
+                
+                adTitleInfo.innerHTML = `Ads - Anuncio (Restante: ${formattedRemaining})`;
+            }
+        }
+
+        function onSkippableStateChanged(adEvent) {
+            // El SDK maneja la UI del botón de saltar, esto sólo es informativo.
+        }
+        
+        // ------------------------------------------------------------------
+        // FUNCIONES DE UTILIDAD Y REPRODUCTOR
+        // ------------------------------------------------------------------
+        
         function formatTime(seconds) {
             if (isNaN(seconds) || seconds < 0) return '00:00';
             const absSeconds = Math.abs(seconds);
@@ -435,6 +708,23 @@
         }
 
         function togglePlayPause() {
+            if (isAdPlaying) return; 
+
+            // CLAVE: LÓGICA DE INICIO DE ANUNCIOS (PRE-ROLL) EN EL PRIMER CLIC
+            if (!userInteractionInitiated && adsManager) {
+                userInteractionInitiated = true;
+
+                try {
+                    adsManager.start(); 
+                    console.log("IMA: Ad Manager Start ejecutado por el clic del usuario.");
+                    video.pause(); 
+                    return; 
+                } catch (adError) {
+                    console.error("IMA: Error al iniciar el Ad Manager con .start():", adError);
+                    video.play();
+                }
+            }
+
             if (video.paused || video.ended) {
                 video.play();
             } else {
@@ -443,7 +733,7 @@
         }
         
         function scrub(e) {
-            if (!video.duration) return;
+            if (!video.duration || isAdPlaying) return; 
 
             const clientX = e.touches ? e.changedTouches[0].pageX : e.clientX;
 
@@ -458,9 +748,6 @@
             remainingTimeDisplay.textContent = '-' + formatTime(video.duration - video.currentTime);
         }
 
-        /**
-         * Carga la fuente de video según el ID del servidor, manejando MP4 y M3U8 (HLS).
-         */
         function loadServer(serverId) {
             const server = SERVERS.find(s => s.id === serverId);
             if (!server) {
@@ -468,14 +755,12 @@
                 return;
             }
 
-            // 1. Marcar el botón activo
             document.querySelectorAll('.server-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
             document.getElementById(`btn-${serverId}`).classList.add('active');
 
 
-            // 2. Destruir HLS si existe
             if (hlsInstance) {
                 hlsInstance.destroy();
                 hlsInstance = null;
@@ -484,12 +769,13 @@
             const wasPlaying = !video.paused;
             const currentTime = video.currentTime;
             
-            // 3. Mostrar carga
             loadingOverlay.classList.add('visible');
             videoInfoDisplay.textContent = server.name;
             currentServerId = server.id;
 
-            // 4. Limpiar source y re-adjuntar elementos (importante para HLS)
+            // Reiniciar el estado de la interacción para asegurar que el pre-roll se muestre en el primer clic.
+            userInteractionInitiated = false; 
+
             video.removeAttribute('src');
             video.load();
 
@@ -501,7 +787,10 @@
                 });
 
                 hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
-                    // Restablecer tiempo y reanudar
+                    if (typeof google !== 'undefined' && typeof google.ima !== 'undefined') {
+                        initAdsManager();
+                    }
+
                     video.currentTime = currentTime; 
                     if (wasPlaying) video.play().catch(e => console.error("Error al reanudar:", e));
                     loadingOverlay.classList.remove('visible');
@@ -512,9 +801,6 @@
                 
                 hlsInstance.on(Hls.Events.ERROR, function (event, data) {
                     console.error("HLS Error:", data.details);
-                    if (data.fatal) {
-                        videoInfoDisplay.textContent = `${server.name} (Error: Fallback MP4)`;
-                    }
                 });
 
                 hlsInstance.attachMedia(video);
@@ -524,8 +810,11 @@
                 video.src = server.url;
                 video.load();
                 
-                // Usamos un listener para saber cuándo cargar y reanudar
                 const handleLoadedData = () => {
+                    if (typeof google !== 'undefined' && typeof google.ima !== 'undefined') {
+                        initAdsManager();
+                    }
+
                     video.currentTime = currentTime; 
                     if (wasPlaying) video.play().catch(e => console.error("Error al reanudar:", e));
                     loadingOverlay.classList.remove('visible');
@@ -535,19 +824,15 @@
                 
                 video.addEventListener('loadeddata', handleLoadedData);
             }
-            // 5. Cierra el menú después de iniciar la carga
             serverMenu.classList.remove('visible'); 
         }
         
         // ------------------------------------------------------------------
-        // INICIALIZACIÓN Y EVENTOS DEL SELECTOR
+        // INICIALIZACIÓN Y EVENTOS DEL REPRODUCTOR
         // ------------------------------------------------------------------
 
-        /**
-         * Crea los botones de servidor dinámicamente.
-         */
         function initializeServerButtons() {
-            serverOptionsContainer.innerHTML = ''; // Limpiar contenedor
+            serverOptionsContainer.innerHTML = ''; 
 
             SERVERS.forEach(server => {
                 const button = document.createElement('button');
@@ -564,30 +849,22 @@
             });
         }
         
-        initializeServerButtons(); // Ejecutar inicialización de botones
+        initializeServerButtons(); 
 
-        // Evento de clic en la tuerquita: Abre/Cierra el menú
+        // Eventos del menú de servidores
         settingsBtn.addEventListener('click', (e) => {
+            if (isAdPlaying) return; 
             e.stopPropagation(); 
             serverMenu.classList.toggle('visible');
         });
-        
-        // CORRECCIÓN CLAVE: Evita que los clics DENTRO del menú de servidores cierren todo.
-        serverMenu.addEventListener('click', (e) => {
-            e.stopPropagation();
-        });
-        serverMenu.addEventListener('touchstart', (e) => {
-            e.stopPropagation();
-        });
+        serverMenu.addEventListener('click', (e) => { e.stopPropagation(); });
+        serverMenu.addEventListener('touchstart', (e) => { e.stopPropagation(); });
 
+        loadServer(currentServerId); // INICIA LA CARGA Y EL FLUJO DE ADS
 
-        // Carga inicial (Llama a loadServer con el ID inicial)
-        loadServer(currentServerId);
-
-
-        // Eventos para el Overlay de Carga durante el cambio de tiempo 
+        // Eventos de estado de video
         video.addEventListener('seeking', () => {
-             if (!isDragging) {
+             if (!isDragging && !isAdPlaying) {
                  loadingOverlay.classList.add('visible');
              }
         });
@@ -596,21 +873,22 @@
              loadingOverlay.classList.remove('visible');
         });
 
-        // A. DETENER PROPAGACIÓN EN TODOS LOS CONTROLES 
+        // Detener propagación en controles para evitar conflictos
         allControls.forEach(control => {
             control.addEventListener('click', (e) => {
+                if (isAdPlaying) return;
                 e.stopPropagation();
             });
             control.addEventListener('touchend', (e) => {
+                if (isAdPlaying) return;
                 e.stopPropagation();
             });
         });
 
-        // B. GESTIÓN DEL CLICK (RATÓN) Y TOQUE (TÁCTIL) DE ALTERNANCIA 
-        
-        // 1. Alternancia al hacer clic (Ratón)
+        // Alternancia de controles
         playerContainer.addEventListener('click', () => {
-            // Cierra el menú si está abierto
+            if (isAdPlaying) return; 
+
             if (serverMenu.classList.contains('visible')) { 
                 serverMenu.classList.remove('visible');
                 return; 
@@ -630,11 +908,9 @@
             }
         });
         
-        // 2. Alternancia al finalizar el toque (Táctil/Móvil)
         playerContainer.addEventListener('touchend', (e) => {
-             if (isDragging) return; 
+             if (isDragging || isAdPlaying) return; 
 
-             // Cierra el menú si está abierto
              if (serverMenu.classList.contains('visible')) {
                 serverMenu.classList.remove('visible');
                 return;
@@ -651,7 +927,7 @@
              }
         });
 
-        // 2. Click en el botón central de Play/Pause 
+        // Click en el botón central de Play/Pause
         playPauseBtn.addEventListener('click', (e) => {
             e.stopPropagation(); 
             togglePlayPause();
@@ -665,7 +941,7 @@
         });
 
         video.addEventListener('pause', () => {
-            if (isDragging) return; 
+            if (isDragging || isAdPlaying) return; 
 
             playPauseIcon.textContent = 'play_arrow';
             playPauseBtn.classList.add('is-paused');
@@ -675,21 +951,25 @@
             playerContainer.style.cursor = 'default';
         });
 
-        // 3. Avance y Retroceso de 10 segundos 
+        // Avance y Retroceso de 10 segundos 
         seekBackBtn.addEventListener('click', (e) => {
+            if (isAdPlaying) return; 
             e.stopPropagation(); 
             video.currentTime = Math.max(0, video.currentTime - 10);
         });
 
         seekForwardBtn.addEventListener('click', (e) => {
+            if (isAdPlaying) return; 
             e.stopPropagation(); 
             video.currentTime = Math.min(video.duration, video.currentTime + 10);
         });
 
-        // 4. Actualización de la Barra de Progreso y Tiempo (Normal) 
+        // Actualización de la Barra de Progreso y Tiempo (Normal) 
         video.addEventListener('timeupdate', () => {
             const duration = video.duration;
             const currentTime = video.currentTime;
+            
+            if (isAdPlaying) return; 
 
             if (duration) {
                 const percent = (currentTime / duration) * 100;
@@ -700,14 +980,21 @@
                 const remainingTime = duration - currentTime;
                 remainingTimeDisplay.textContent = '-' + formatTime(remainingTime);
             }
+            
+            // Redimensionar el Ad Manager si está activo
+            if (adsManager && isAdPlaying) {
+                adsManager.resize(playerContainer.offsetWidth, playerContainer.offsetHeight, document.fullscreenElement ? google.ima.ViewMode.FULLSCREEN : google.ima.ViewMode.NORMAL);
+            }
         });
         
         // ------------------------------------------------------------------
         // LÓGICA DE ARRASTRE (SCRUBBING)
         // ------------------------------------------------------------------
 
-        // Iniciar arrastre (Ratón)
-        progressBarContainer.addEventListener('mousedown', (e) => {
+        // Iniciar arrastre (Ratón/Táctil)
+        const startScrub = (e) => {
+            if (isAdPlaying) return; 
+
             e.preventDefault();
             e.stopPropagation(); 
             isDragging = true;
@@ -715,40 +1002,17 @@
             scrub(e); 
             video.pause(); 
             loadingOverlay.classList.add('visible'); 
-        });
+        };
+        progressBarContainer.addEventListener('mousedown', startScrub);
+        progressBarContainer.addEventListener('touchstart', startScrub);
 
-        // Mover el ratón (ACTUALIZACIÓN EN TIEMPO REAL)
+        // Mover el ratón/dedo (ACTUALIZACIÓN EN TIEMPO REAL)
         document.addEventListener('mousemove', (e) => {
             if (isDragging) {
                 e.preventDefault(); 
                 scrub(e); 
             }
         });
-
-        // Detener arrastre (Ratón)
-        document.addEventListener('mouseup', () => {
-            if (isDragging) {
-                isDragging = false;
-                loadingOverlay.classList.remove('visible'); 
-                
-                if (wasPlayingBeforeDrag) {
-                    video.play(); 
-                }
-            }
-        });
-        
-        // Iniciar arrastre (Táctil)
-        progressBarContainer.addEventListener('touchstart', (e) => {
-            e.preventDefault(); 
-            e.stopPropagation(); 
-            isDragging = true;
-            wasPlayingBeforeDrag = !video.paused;
-            scrub(e); 
-            video.pause(); 
-            loadingOverlay.classList.add('visible'); 
-        });
-
-        // Mover el dedo (Táctil - ACTUALIZACIÓN EN TIEMPO REAL)
         document.addEventListener('touchmove', (e) => {
             if (isDragging) {
                 e.preventDefault();
@@ -756,8 +1020,8 @@
             }
         }, { passive: false });
 
-        // Detener arrastre (Táctil)
-        document.addEventListener('touchend', () => {
+        // Detener arrastre (Ratón/Táctil)
+        const stopScrub = () => {
             if (isDragging) {
                 isDragging = false;
                 loadingOverlay.classList.remove('visible'); 
@@ -766,14 +1030,16 @@
                     video.play(); 
                 }
             }
-        });
+        };
+        document.addEventListener('mouseup', stopScrub);
+        document.addEventListener('touchend', stopScrub);
         
         // ------------------------------------------------------------------
         // FIN LÓGICA DE ARRASTRE
         // ------------------------------------------------------------------
         
 
-        // 5. Fullscreen 
+        // Fullscreen 
         fullscreenBtn.addEventListener('click', (e) => {
             e.stopPropagation(); 
             if (document.fullscreenElement) {
@@ -783,8 +1049,10 @@
             }
         });
 
-        // 6. Mostrar/Ocultar controles con movimiento del ratón 
+        // Mostrar/Ocultar controles con movimiento del ratón 
         playerContainer.addEventListener('mousemove', () => {
+            if (isAdPlaying) return; 
+
             if (playerContainer.classList.contains('controls-hidden')) {
                 playerContainer.classList.remove('controls-hidden');
                 playerContainer.style.cursor = 'default';
@@ -794,7 +1062,6 @@
             
             controlsTimeout = setTimeout(() => {
                 if (!video.paused) {
-                    // Solo ocultamos si el menú de servidor NO está abierto
                     if (!serverMenu.classList.contains('visible')) {
                         playerContainer.classList.add('controls-hidden');
                         playerContainer.style.cursor = 'none';
@@ -803,14 +1070,14 @@
             }, 3000);
         });
         
-        // Ocultar el cursor al salir, si están ocultos los controles 
+        // Ocultar el cursor al salir
         playerContainer.addEventListener('mouseleave', () => {
             if (!video.paused && playerContainer.classList.contains('controls-hidden')) {
                 playerContainer.style.cursor = 'none';
             }
         });
 
-        // 7. Inicialización de GOOGLE CAST 
+        // Inicialización de GOOGLE CAST 
         window['__onGCastApiAvailable'] = function(isAvailable) {
             if (isAvailable) {
                 cast.framework.CastContext.getInstance().setOptions({
