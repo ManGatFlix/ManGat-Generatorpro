@@ -375,9 +375,9 @@
         /* ⭐️ CLAVE: Estilos para el nuevo botón de descarga y los iconos inferiores ⭐️ */
         .bottom-right-icons {
             align-self: flex-end;
-            display: flex; /* Añadir display flex para alinear iconos inferiores */
-            gap: 15px; /* Espacio entre los iconos inferiores */
-            align-items: center; /* Alinear verticalmente */
+            display: flex; 
+            gap: 15px; 
+            align-items: center; 
         }
         
         #cast-button {
@@ -565,7 +565,6 @@
 
         // ------------------------------------------------------------------
         // GESTOR DE ANUNCIOS (ADS MANAGER)
-        // (No se modifica esta sección)
         // ------------------------------------------------------------------
         
         function initAdsManager() {
@@ -801,31 +800,65 @@
             }
         }
 
-        // ⭐️ CLAVE: Función para iniciar la descarga del video ⭐️
-        function startDownload() {
+        // ⭐️ CLAVE: Función para iniciar la descarga del video (FORZADA con Blob) ⭐️
+        async function startDownload() {
             const server = SERVERS.find(s => s.id === currentServerId);
             
             if (!server || server.type !== 'mp4') {
                 alert('La descarga solo está disponible para videos MP4.');
                 return;
             }
-            
-            // Crear un enlace temporal para forzar la descarga
-            const a = document.createElement('a');
-            a.href = server.url;
-            
-            // Intentar establecer el nombre del archivo. Usamos el título y el nombre del servidor.
-            const titleElement = document.querySelector('.video-title').textContent.trim();
-            const filename = `${titleElement.replace(/\s+/g, '_')}_${server.name}.mp4`;
-            
-            a.download = filename; 
-            
-            // Simular un clic en el enlace
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
 
-            alert(`Iniciando descarga de: ${filename}`);
+            // 1. Mostrar mensaje de carga
+            loadingOverlay.classList.add('visible');
+            const titleElement = document.querySelector('.video-title').textContent.trim();
+            // Aseguramos que el nombre del archivo sea apto para descarga
+            const cleanTitle = titleElement.replace(/[^\w\s-]/g, '').replace(/[\s-]+/g, '_'); 
+            const filename = `${cleanTitle}_${server.name}.mp4`;
+            document.querySelector('.loading-message').textContent = 'Preparando descarga...';
+
+
+            try {
+                // 2. Usar fetch para obtener el archivo MP4 como datos binarios
+                const response = await fetch(server.url);
+
+                if (!response.ok) {
+                    throw new Error(`Error al obtener el archivo: ${response.statusText}`);
+                }
+
+                // 3. Obtener los datos como un Blob
+                const blob = await response.blob();
+                
+                // 4. Crear una URL de objeto temporal para el Blob
+                const url = window.URL.createObjectURL(blob);
+
+                // 5. Crear un enlace temporal para forzar la descarga
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = filename; 
+                
+                document.body.appendChild(a);
+                a.click();
+
+                // 6. Limpiar la URL de objeto después de la descarga (con un pequeño retardo)
+                // Es importante hacer esto para liberar memoria
+                setTimeout(() => {
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    console.log(`Descarga iniciada de: ${filename}`);
+                }, 100); 
+
+                alert(`Descarga de "${filename}" iniciada. Revisa tus descargas.`);
+
+            } catch (error) {
+                console.error("Error al forzar la descarga:", error);
+                alert(`No se pudo descargar el archivo. Intenta de nuevo. Detalles: ${error.message}`);
+            } finally {
+                // 7. Ocultar la pantalla de carga y restaurar el mensaje
+                loadingOverlay.classList.remove('visible');
+                document.querySelector('.loading-message').textContent = 'Cargando VIP...';
+            }
         }
 
         function loadServer(serverId) {
@@ -956,6 +989,10 @@
             e.stopPropagation();
             if (!downloadBtn.classList.contains('disabled') && !isAdPlaying) {
                 startDownload();
+            } else if (isAdPlaying) {
+                 alert('No se puede descargar durante la reproducción de anuncios.');
+            } else {
+                 alert('La descarga solo está disponible para servidores MP4.');
             }
         });
 
