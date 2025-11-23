@@ -793,46 +793,15 @@
         function updateDownloadButton(server) {
             if (server && server.type === 'mp4') {
                 downloadBtn.classList.remove('disabled');
-                downloadBtn.title = 'Descarga avanzada (se elegirá ubicación)';
+                downloadBtn.title = 'Descargar video directamente';
             } else {
                 downloadBtn.classList.add('disabled');
                 downloadBtn.title = 'Descarga solo disponible para servidores MP4';
             }
         }
 
-        // ⭐️ FALLBACK ESTÁNDAR (Si la API avanzada no funciona o falla) ⭐️
-        function startStandardDownloadFallback() {
-            const server = SERVERS.find(s => s.id === currentServerId);
-            
-            if (!server || server.type !== 'mp4') return;
-
-            const titleElement = document.querySelector('.video-title').textContent.trim();
-            const cleanTitle = titleElement.replace(/[^\w\s-]/g, '').replace(/[\s-]+/g, '_'); 
-            const filename = `${cleanTitle}_${server.name}.mp4`;
-
-            // Enlace directo forzado
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = server.url;
-            a.download = filename; 
-
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            
-            alert(`Descarga de "${filename}" iniciada (Método Estándar). Revisa tu carpeta de descargas.`);
-            console.log(`Descarga estándar iniciada: ${filename}`);
-        }
-
-        // ⭐️ CLAVE: Función para iniciar la descarga avanzada y guardar en local ⭐️
-        async function startDownload() {
-            // 1. Verificar si el navegador soporta la API avanzada
-            if (!('showSaveFilePicker' in window)) {
-                alert('Tu navegador no soporta la descarga avanzada. Usando el método estándar de descarga.');
-                startStandardDownloadFallback(); 
-                return;
-            }
-
+        // ⭐️ CLAVE: Función para iniciar la descarga del video (Enlace Directo Forzado y Rápido) ⭐️
+        function startDownload() {
             const server = SERVERS.find(s => s.id === currentServerId);
             
             if (!server || server.type !== 'mp4') {
@@ -844,59 +813,28 @@
             const titleElement = document.querySelector('.video-title').textContent.trim();
             const cleanTitle = titleElement.replace(/[^\w\s-]/g, '').replace(/[\s-]+/g, '_'); 
             const filename = `${cleanTitle}_${server.name}.mp4`;
+
+            // 1. Crear un enlace temporal
+            const a = document.createElement('a');
+            a.style.display = 'none';
             
-            let fileHandle;
+            // 2. Usar la URL original del servidor
+            // Esto es crucial para que la descarga sea rápida (sin cargar todo el archivo en la memoria del navegador)
+            a.href = server.url;
             
-            try {
-                // 2. Mostrar mensaje de carga
-                loadingOverlay.classList.add('visible');
-                document.querySelector('.loading-message').textContent = 'Esperando selección de carpeta...';
+            // 3. Establecer la propiedad 'download'
+            // Esto le dice al navegador que lo guarde en la carpeta predeterminada de descargas en lugar de reproducirlo
+            a.download = filename; 
 
+            // 4. Disparar el clic
+            document.body.appendChild(a);
+            a.click();
 
-                // 3. PEDIR AL USUARIO QUE SELECCIONE LA UBICACIÓN Y NOMBRE
-                fileHandle = await window.showSaveFilePicker({
-                    suggestedName: filename,
-                    types: [{
-                        description: 'Video MP4',
-                        accept: {'video/mp4': ['.mp4']},
-                    }],
-                });
-                
-                document.querySelector('.loading-message').textContent = 'Descargando datos del video (invisible)...';
-
-                // 4. Obtener el archivo MP4 de forma invisible
-                const response = await fetch(server.url);
-
-                if (!response.ok) {
-                    throw new Error(`Error al obtener el archivo: ${response.statusText}`);
-                }
-                
-                // 5. Obtener los datos como un Blob (descarga invisible completada)
-                const blob = await response.blob();
-                
-                document.querySelector('.loading-message').textContent = 'Guardando en la ubicación elegida...';
-
-                // 6. Crear un escritor y escribir el Blob en la ubicación elegida por el usuario
-                const writableStream = await fileHandle.createWritable();
-                await writableStream.write(blob);
-                await writableStream.close(); 
-
-                alert(`¡Descarga COMPLETADA! El archivo se guardó como: ${filename}`);
-
-            } catch (error) {
-                // El error 'AbortError' ocurre cuando el usuario cierra la ventana de guardar
-                if (error.name === 'AbortError') {
-                    console.log("Descarga cancelada por el usuario.");
-                    alert("Descarga cancelada por el usuario.");
-                } else {
-                    console.error("Error en la descarga avanzada:", error);
-                    alert(`ERROR: No se pudo guardar el archivo. Intenta de nuevo. Detalles: ${error.message}`);
-                }
-            } finally {
-                // 7. Ocultar la pantalla de carga
-                loadingOverlay.classList.remove('visible');
-                document.querySelector('.loading-message').textContent = 'Cargando VIP...';
-            }
+            // 5. Limpiar
+            document.body.removeChild(a);
+            
+            alert(`Descarga de "${filename}" iniciada. Revisa tus descargas.`);
+            console.log(`Descarga directa forzada iniciada: ${filename}`);
         }
 
         function loadServer(serverId) {
