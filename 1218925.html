@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reproductor Multi-Servidor Estabilizado con Contador de Anuncios</title> 
+    <title>Reproductor Multi-Servidor Estabilizado con Anuncios y Descarga</title> 
     
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     
@@ -40,6 +40,7 @@
             user-select: none;
         }
 
+        /* ⭐️ CLAVE: Ocultar el cursor solo cuando está reproduciendo y los controles están ocultos ⭐️ */
         .controls-hidden.playing {
             cursor: none; 
         }
@@ -52,6 +53,25 @@
             left: 0;
             object-fit: contain;
             z-index: 1; 
+        }
+
+        /* ⭐️ ESTILO PARA LA IMAGEN DE PORTADA ⭐️ */
+        #poster-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover; 
+            z-index: 2; 
+            pointer-events: auto; 
+            opacity: 1;
+            transition: opacity 0.5s ease;
+        }
+
+        #poster-image.hidden {
+            opacity: 0;
+            pointer-events: none;
         }
 
         /* ---------------------- ESTILO DEL AD CONTAINER (Donde se dibuja el anuncio y el botón Skip) ---------------------- */
@@ -79,25 +99,25 @@
         /* ⭐️ ESTILO DEL OVERLAY PARA EL CONTADOR (Parte Superior/Centro) ⭐️ */
         #custom-ad-counter-overlay {
             position: absolute;
-            top: 15px; /* Separación del borde superior */
+            top: 15px; 
             left: 50%;
-            transform: translateX(-50%); /* Centrar horizontalmente */
-            z-index: 12; /* Encima del ad-container */
-            pointer-events: none; /* No debe interferir con clics del anuncio */
-            display: none; /* Oculto por defecto */
+            transform: translateX(-50%); 
+            z-index: 12; 
+            pointer-events: none; 
+            display: none; 
         }
 
         #custom-ad-counter-overlay #ad-title-info {
             display: flex; 
             align-items: center;
-            background-color: rgba(244, 67, 54, 0.85); /* Fondo rojo semi-transparente */
+            background-color: rgba(244, 67, 54, 0.8); 
             color: white;
             padding: 5px 12px;
             border-radius: 8px;
             font-size: 1.1em;
             font-weight: bold;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-            white-space: nowrap; /* Evita que el texto se rompa */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+            pointer-events: auto; 
         }
 
 
@@ -151,6 +171,7 @@
             transition: opacity 0.3s ease;
         }
         
+        /* Esto oculta los controles */
         .controls-hidden .top-controls,
         .controls-hidden .center-controls,
         .controls-hidden .bottom-controls {
@@ -195,7 +216,7 @@
             color: #fff;
         }
         
-        /* ---------------------- ESTILOS DEL MENÚ FLOTANTE (SERVIDOR) ---------------------- */
+        /* ---------------------- ESTILO DEL MENÚ FLOTANTE (SERVIDOR) ---------------------- */
         .quality-menu {
             position: absolute;
             top: 55px; 
@@ -264,6 +285,7 @@
             display: none;
         }
 
+        /* Estilo base para todos los botones centrales (55px) */
         .center-controls .control-button {
             width: 55px;
             height: 55px;
@@ -278,13 +300,21 @@
             transition: background-color 0.1s;
         }
         
+        /* ⭐️ TAMAÑO DEL BOTÓN DE PLAY ESTÁNDAR (PAUSADO) ⭐️ */
+        /* Revertimos al tamaño de 55px (igual que los demás botones centrales) */
         .center-controls .control-button.play-pause-btn.is-paused {
-            width: 75px;
-            height: 75px;
-            background-color: rgba(255, 255, 255, 0.3);
-            border: 2px solid rgba(255, 255, 255, 0.6);
+            width: 55px; 
+            height: 55px;
+            background-color: rgba(255, 255, 255, 0.2); 
+            border: none; 
+            box-shadow: none; 
+        }
+        /* Aseguramos que el ícono de la flecha tenga el tamaño estándar */
+        .center-controls .control-button.play-pause-btn.is-paused .icon {
+            font-size: 32px; 
         }
 
+        /* Estilo base para los íconos centrales (32px) */
         .center-controls .icon {
             font-size: 32px;
             color: #fff;
@@ -342,8 +372,12 @@
             margin-bottom: 15px;
         }
 
+        /* ⭐️ CLAVE: Estilos para el nuevo botón de descarga y los iconos inferiores ⭐️ */
         .bottom-right-icons {
             align-self: flex-end;
+            display: flex; 
+            gap: 15px; 
+            align-items: center; 
         }
         
         #cast-button {
@@ -366,31 +400,37 @@
             opacity: 0; 
             pointer-events: none;
         }
+
+        /* Estilo para el botón de descarga */
+        #download-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
         
     </style>
 </head>
 <body>
-    <div class="video-player-container controls-hidden" id="player-container">
+    <div class="video-player-container" id="player-container">
         
         <div id="ad-container"></div>
+        <img id="poster-image" src="https://media.themoviedb.org/t/p/w640_and_h360_face/9sEN4QGCoa2gXxrWWVjcEbX0dLT.jpg" alt="Poster de la película o serie">
         
         <video id="actual-video" preload="auto" playsinline></video>
         
         <div id="custom-ad-counter-overlay">
-            <span id="ad-title-info">Ads-Sin Anuncios Ser Vip -free 1m30s</span>
-           
+            <span id="ad-title-info">Ads - <span id="ad-message">Saltable en (<span id="ad-countdown">0</span>)</span></span>
         </div>
         
         <div id="loading-overlay">
-            <span class="loading-message">Cargando...</span>
+            <span class="loading-message">Cargando VIP...</span>
         </div>
         
         <div class="top-controls">
             <div class="top-left-info" id="top-left-info-block"> 
                 
                 <div class="video-title">
-                  chainsaw man pelicula                                <br>
-                    <small id="video-info">Cargando fuente...</small>
+                  Hazbin Hotel 2x8                               <br>
+                    <small id="video-info">Cargando VIP...</small>
                 </div>
             </div>
             
@@ -429,9 +469,10 @@
                 <div class="progress-bar" id="progress-bar"></div>
             </div>
             <div class="bottom-right-icons">
+                <span class="material-icons icon" id="download-btn">file_download</span> 
                 <span class="material-icons icon" id="fullscreen-btn">fullscreen</span>
             </div>
-        </div>
+            </div>
         
         <div id="ad-volume-control"></div>
     </div>
@@ -445,19 +486,19 @@
             { 
                 id: 'server1', 
                 name: 'Stremanh', 
-                url: 'https://seed305.bitchute.com/ia3REeSF3Duv/zU3r6PZlscm3.mp4', 
+                url: 'https://hugh.cdn.rumble.cloud/video/fww1/3b/s8/2/c/W/U/B/cWUBz.aaa.mp4', 
                 type: 'mp4' // si es m3u8 solo cambia el type
             },
             { 
                 id: 'server2', 
                 name: 'Flyxplor', 
-                url: 'https://seed305.bitchute.com/ia3REeSF3Duv/zU3r6PZlscm3.mp4', 
+                url: 'https://hugh.cdn.rumble.cloud/video/fww1/3b/s8/2/c/W/U/B/cWUBz.aaa.mp4', 
                 type: 'mp4' 
             },
             { 
                 id: 'server3', 
                 name: 'multiplow', 
-                url: 'https://seed305.bitchute.com/ia3REeSF3Duv/zU3r6PZlscm3.mp4', 
+                url: 'https://hugh.cdn.rumble.cloud/video/fww1/3b/s8/2/c/W/U/B/cWUBz.aaa.mp4', 
                 type: 'mp4' 
             }
         ];
@@ -468,9 +509,6 @@
         
         // ⭐️ Tu URL de anuncio original
         const VAST_URL = 'https://impeccable-sense.com/dhmpF.z/dpGHNevXZGG/Un/EepmO9Bu/ZOUClukeP/TKYp3RM/D/k/wUNyz/YRtLNKjKc_wkOmTQAL3-NhycZrsoabW/1Opvd/DK0lxC';
-        // url original https://impeccable-sense.com/dhmpF.z/dpGHNevXZGG/Un/EepmO9Bu/ZOUClukeP/TKYp3RM/D/k/wUNyz/YRtLNKjKc_wkOmTQAL3-NhycZrsoabW/1Opvd/DK0lxC
-        // URL VAST de Google para PRUEBAS:
-        // const VAST_URL = 'https://pubads.g.doubleclick.net/gampad/ads?iu=/21775744923/external/vmap_ad_samples&sz=640x480&cust_params=sample_ar%3Dpreonly&ciu_szs=300x250&gdfp_req=1&ad_rule=1&output=xml_vmap1&unviewed_position_start=1&env=vp&impl=s&correlator=';
         
         // Cue points: '0' para Pre-roll, '15' para Mid-roll.
         const CUE_POINTS = '0,15'; 
@@ -492,11 +530,18 @@
         const castButton = document.getElementById('cast-button'); 
         const loadingOverlay = document.getElementById('loading-overlay'); 
         const videoInfoDisplay = document.getElementById('video-info');
+        // ⭐️ CLAVE: Referencia al nuevo botón de descarga ⭐️
+        const downloadBtn = document.getElementById('download-btn'); 
+        
+        // ⭐️ REFERENCIA AL POSTER ⭐️
+        const posterImage = document.getElementById('poster-image'); 
         
         // ELEMENTOS DE ANUNCIOS
         const adContainer = document.getElementById('ad-container');
         const customAdCounterOverlay = document.getElementById('custom-ad-counter-overlay');
         const adTitleInfo = document.getElementById('ad-title-info');
+        const adCountdown = document.getElementById('ad-countdown');
+        const adMessage = document.getElementById('ad-message'); 
 
         // ELEMENTOS DEL MENÚ DE SERVIDORES
         const settingsBtn = document.getElementById('settings-btn'); 
@@ -535,7 +580,7 @@
 
                 // El elemento de volumen es esencial para la compatibilidad del SDK
                 adDisplayContainer = new google.ima.AdDisplayContainer(adContainer, video, document.getElementById('ad-volume-control'));
-                adsLoader = new google.ima.AdsLoader(adDisplayContainer);
+                adsLoader = new google.ima.AdsLoader(adContainer);
                 
                 adsLoader.addEventListener(
                     google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,
@@ -576,8 +621,8 @@
             const adsRenderingSettings = new google.ima.AdsRenderingSettings();
             adsRenderingSettings.restoreCustomPlaybackStateOnAdBreakComplete = true; 
             
-            // ⭐️ CONFIGURACIÓN CLAVE: El botón Skip aparece a los 15 segundos (coincide con tu XML)
-            adsRenderingSettings.skipButtonDisplayTime = 15000; 
+            // ⭐️ CONFIGURACIÓN CLAVE: El botón Skip aparece a los 15 segundos si el VAST lo permite.
+            adsRenderingSettings.skipButtonDisplayTime = 15000;
 
             adsManager = adsManagerLoadedEvent.getAdsManager(video, adsRenderingSettings);
 
@@ -627,6 +672,9 @@
             adContainer.classList.remove('active');
             document.querySelector('.video-title').style.display = 'block';
             
+            // ⭐️ OCULTAR EL POSTER AL REANUDAR EL CONTENIDO ⭐️
+            posterImage.classList.add('hidden'); 
+            
             video.play();
         }
         
@@ -644,49 +692,39 @@
         
         function onAdCompleted(adEvent) {
             console.log("Ad Completed.");
-            customAdCounterOverlay.style.display = 'none';
             document.querySelector('.video-title').style.display = 'block';
         }
 
-        // ⭐️ FUNCIÓN CLAVE: Lógica del contador de tiempo real del anuncio (M:SS) ⭐️
+        // ⭐️ FUNCIÓN CLAVE: Lógica del contador en la parte superior central ⭐️
         function onAdProgress(adEvent) {
             const ad = adEvent.getAd();
             const currentTime = adEvent.getAdData().currentTime;
-            const duration = ad.getDuration(); 
+            const duration = ad.getDuration();
             
-            // Tiempo límite de skip (configurado en 15 segundos)
+            // Tiempo límite de skip (15 segundos)
             const skipThreshold = 15; 
             
-            if (duration <= 0 || duration === Infinity) {
-                // Si la duración no se reporta correctamente, mostramos un mensaje genérico.
-                adTitleInfo.innerHTML = `Ads - Anuncio`;
-                return;
-            }
-            
-            const totalRemaining = Math.ceil(duration - currentTime);
-            const formattedRemaining = formatTime(totalRemaining);
-            
-            if (ad.isSkippable() && currentTime < skipThreshold) {
-                // Caso 1: Anuncio saltable, mostrando cuenta regresiva para el botón Skip
+            if (currentTime < skipThreshold) {
+                // Muestra el tiempo restante hasta que el botón 'Skip' esté disponible
                 const remainingToSkip = Math.ceil(skipThreshold - currentTime);
-                const timeToSkip = remainingToSkip > 0 ? remainingToSkip : 0;
-                
-                adTitleInfo.innerHTML = `Ads - Saltable en (${timeToSkip}) (Restante: ${formattedRemaining})`;
-
-            } else if (ad.isSkippable() && currentTime >= skipThreshold) {
-                // Caso 2: Anuncio saltable, ya se puede hacer skip (el SDK dibuja el botón)
-                
-                adTitleInfo.innerHTML = `Ads - Saltar ya (Restante: ${formattedRemaining})`;
-
+                adCountdown.textContent = remainingToSkip > 0 ? remainingToSkip : 0;
+                adMessage.innerHTML = `Saltable en (${adCountdown.textContent})`;
             } else {
-                // Caso 3: Anuncio NO saltable 
+                // Muestra el tiempo restante total del anuncio
+                const remainingTime = Math.ceil(duration - currentTime);
+                adCountdown.textContent = remainingTime > 0 ? remainingTime : 0;
                 
-                adTitleInfo.innerHTML = `Ads - Anuncio (Restante: ${formattedRemaining})`;
+                // Muestra el mensaje si ya se puede saltar (el botón del SDK debe aparecer en la esquina inferior)
+                if (ad.isSkippable()) {
+                     adMessage.innerHTML = `Saltar ya (Restante: ${adCountdown.textContent})`;
+                } else {
+                     adMessage.innerHTML = `Anuncio (Restante: ${adCountdown.textContent})`;
+                }
             }
         }
 
         function onSkippableStateChanged(adEvent) {
-            // El SDK maneja la UI del botón de saltar, esto sólo es informativo.
+            // El SDK maneja la UI del botón de saltar, ahora a partir de los 15s (si el VAST lo permite).
         }
         
         // ------------------------------------------------------------------
@@ -713,6 +751,9 @@
             // CLAVE: LÓGICA DE INICIO DE ANUNCIOS (PRE-ROLL) EN EL PRIMER CLIC
             if (!userInteractionInitiated && adsManager) {
                 userInteractionInitiated = true;
+                
+                // Aseguramos que los controles se oculten después del inicio
+                playerContainer.classList.add('controls-hidden');
 
                 try {
                     adsManager.start(); 
@@ -748,6 +789,116 @@
             remainingTimeDisplay.textContent = '-' + formatTime(video.duration - video.currentTime);
         }
 
+        // ⭐️ CLAVE: Función para habilitar/deshabilitar el botón de descarga ⭐️
+        function updateDownloadButton(server) {
+            if (server && server.type === 'mp4') {
+                downloadBtn.classList.remove('disabled');
+                downloadBtn.title = 'Descarga avanzada (se elegirá ubicación)';
+            } else {
+                downloadBtn.classList.add('disabled');
+                downloadBtn.title = 'Descarga solo disponible para servidores MP4';
+            }
+        }
+
+        // ⭐️ FALLBACK ESTÁNDAR (Si la API avanzada no funciona o falla) ⭐️
+        function startStandardDownloadFallback() {
+            const server = SERVERS.find(s => s.id === currentServerId);
+            
+            if (!server || server.type !== 'mp4') return;
+
+            const titleElement = document.querySelector('.video-title').textContent.trim();
+            const cleanTitle = titleElement.replace(/[^\w\s-]/g, '').replace(/[\s-]+/g, '_'); 
+            const filename = `${cleanTitle}_${server.name}.mp4`;
+
+            // Enlace directo forzado
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = server.url;
+            a.download = filename; 
+
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            alert(`Descarga de "${filename}" iniciada (Método Estándar). Revisa tu carpeta de descargas.`);
+            console.log(`Descarga estándar iniciada: ${filename}`);
+        }
+
+        // ⭐️ CLAVE: Función para iniciar la descarga avanzada y guardar en local ⭐️
+        async function startDownload() {
+            // 1. Verificar si el navegador soporta la API avanzada
+            if (!('showSaveFilePicker' in window)) {
+                alert('Tu navegador no soporta la descarga avanzada. Usando el método estándar de descarga.');
+                startStandardDownloadFallback(); 
+                return;
+            }
+
+            const server = SERVERS.find(s => s.id === currentServerId);
+            
+            if (!server || server.type !== 'mp4') {
+                alert('La descarga solo está disponible para videos MP4.');
+                return;
+            }
+
+            // Nombre del archivo (limpiando caracteres especiales)
+            const titleElement = document.querySelector('.video-title').textContent.trim();
+            const cleanTitle = titleElement.replace(/[^\w\s-]/g, '').replace(/[\s-]+/g, '_'); 
+            const filename = `${cleanTitle}_${server.name}.mp4`;
+            
+            let fileHandle;
+            
+            try {
+                // 2. Mostrar mensaje de carga
+                loadingOverlay.classList.add('visible');
+                document.querySelector('.loading-message').textContent = 'Esperando selección de carpeta...';
+
+
+                // 3. PEDIR AL USUARIO QUE SELECCIONE LA UBICACIÓN Y NOMBRE
+                fileHandle = await window.showSaveFilePicker({
+                    suggestedName: filename,
+                    types: [{
+                        description: 'Video MP4',
+                        accept: {'video/mp4': ['.mp4']},
+                    }],
+                });
+                
+                document.querySelector('.loading-message').textContent = 'Descargando datos del video (invisible)...';
+
+                // 4. Obtener el archivo MP4 de forma invisible
+                const response = await fetch(server.url);
+
+                if (!response.ok) {
+                    throw new Error(`Error al obtener el archivo: ${response.statusText}`);
+                }
+                
+                // 5. Obtener los datos como un Blob (descarga invisible completada)
+                const blob = await response.blob();
+                
+                document.querySelector('.loading-message').textContent = 'Guardando en la ubicación elegida...';
+
+                // 6. Crear un escritor y escribir el Blob en la ubicación elegida por el usuario
+                const writableStream = await fileHandle.createWritable();
+                await writableStream.write(blob);
+                await writableStream.close(); 
+
+                alert(`¡Descarga COMPLETADA! El archivo se guardó como: ${filename}`);
+
+            } catch (error) {
+                // El error 'AbortError' ocurre cuando el usuario cierra la ventana de guardar
+                if (error.name === 'AbortError') {
+                    console.log("Descarga cancelada por el usuario.");
+                    alert("Descarga cancelada por el usuario.");
+                } else {
+                    console.error("Error en la descarga avanzada:", error);
+                    alert(`ERROR: No se pudo guardar el archivo. Intenta de nuevo. Detalles: ${error.message}`);
+                }
+            } finally {
+                // 7. Ocultar la pantalla de carga
+                loadingOverlay.classList.remove('visible');
+                document.querySelector('.loading-message').textContent = 'Cargando VIP...';
+            }
+        }
+
         function loadServer(serverId) {
             const server = SERVERS.find(s => s.id === serverId);
             if (!server) {
@@ -773,8 +924,17 @@
             videoInfoDisplay.textContent = server.name;
             currentServerId = server.id;
 
+            // ⭐️ CLAVE: Actualizar el botón de descarga con el nuevo servidor ⭐️
+            updateDownloadButton(server);
+
             // Reiniciar el estado de la interacción para asegurar que el pre-roll se muestre en el primer clic.
             userInteractionInitiated = false; 
+            
+            // Asegurar que el poster esté visible al recargar el servidor
+            posterImage.classList.remove('hidden'); 
+            
+            // CLAVE: Asegurar que los controles estén visibles después de la carga para ver el botón de Play
+            playerContainer.classList.remove('controls-hidden');
 
             video.removeAttribute('src');
             video.load();
@@ -862,6 +1022,18 @@
 
         loadServer(currentServerId); // INICIA LA CARGA Y EL FLUJO DE ADS
 
+        // ⭐️ CLAVE: Evento para el botón de descarga ⭐️
+        downloadBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!downloadBtn.classList.contains('disabled') && !isAdPlaying) {
+                startDownload();
+            } else if (isAdPlaying) {
+                 alert('No se puede descargar durante la reproducción de anuncios.');
+            } else {
+                 alert('La descarga solo está disponible para servidores MP4.');
+            }
+        });
+
         // Eventos de estado de video
         video.addEventListener('seeking', () => {
              if (!isDragging && !isAdPlaying) {
@@ -894,6 +1066,13 @@
                 return; 
             }
             
+            // Si el video está cargado y pausado, el clic es para hacer Play
+            if (video.paused && !userInteractionInitiated) {
+                togglePlayPause(); // Intenta iniciar la reproducción/anuncio
+                return;
+            }
+
+            // Muestra/Oculta los controles después del inicio
             playerContainer.classList.toggle('controls-hidden');
 
             const isHidden = playerContainer.classList.contains('controls-hidden');
@@ -915,6 +1094,14 @@
                 serverMenu.classList.remove('visible');
                 return;
              }
+             
+             // Si el video está cargado y pausado, el toque es para hacer Play
+             if (video.paused && !userInteractionInitiated) {
+                 e.preventDefault();
+                 togglePlayPause();
+                 return;
+             }
+
 
              e.preventDefault(); 
              
@@ -925,7 +1112,7 @@
              if (!isHidden) {
                  clearTimeout(controlsTimeout);
              }
-        });
+        }, { passive: false });
 
         // Click en el botón central de Play/Pause
         playPauseBtn.addEventListener('click', (e) => {
@@ -938,6 +1125,8 @@
             playPauseIcon.textContent = 'pause';
             playPauseBtn.classList.remove('is-paused');
             playerContainer.classList.add('playing');
+            // ⭐️ OCULTAR EL POSTER AL INICIAR LA REPRODUCCIÓN ⭐️
+            posterImage.classList.add('hidden'); 
         });
 
         video.addEventListener('pause', () => {
@@ -947,8 +1136,14 @@
             playPauseBtn.classList.add('is-paused');
             playerContainer.classList.remove('playing');
             
+            // ⭐️ Aseguramos que los controles se vean al pausar para mostrar el botón ⭐️
             playerContainer.classList.remove('controls-hidden');
             playerContainer.style.cursor = 'default';
+            
+            // ⭐️ MOSTRAR EL POSTER SI SE PAUSA Y NO HAY AD ⭐️
+            if (!isAdPlaying) {
+                posterImage.classList.remove('hidden');
+            }
         });
 
         // Avance y Retroceso de 10 segundos 
