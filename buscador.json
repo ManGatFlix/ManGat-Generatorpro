@@ -1,8 +1,5 @@
 [
-  { "id": 214264, "type": "tv", "url": "./media/214264-Kizuna-no-Allele.html" },
-  { "id": 1396, "type": "tv", "url": "./series/breaking-bad.html" },
-  { "id": 155, "type": "movie", "url": "./pelis/batman.html" },
-{ "id": 214264, "type": "tv", "url": "./media/214264-Kizuna-no-Allele.html" }
-
-
+  { "id": 214264, "type": "tv", "lang": "SUB", "url": "./media/214264-Kizuna-no-Allele.html" },
+  { "id": 1396, "type": "tv", "lang": "LAT", "url": "./series/breaking-bad.html" },
+  { "id": 155, "type": "movie", "lang": "ESP", "url": "./pelis/batman.html" }
 ]
